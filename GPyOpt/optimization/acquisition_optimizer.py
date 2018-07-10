@@ -61,12 +61,14 @@ class AcquisitionOptimizer(object):
 
         ## --- Selecting the anchor points and removing duplicates
         if self.type_anchor_points_logic == max_objective_anchor_points_logic:
-            anchor_points_generator = ObjectiveAnchorPointsGenerator(self.space, random_design_type, f)
+            num_samples = self.kwargs.get('num_samples', 1000)
+            anchor_points_generator = ObjectiveAnchorPointsGenerator(self.space, random_design_type, f, num_samples = num_samples)
         elif self.type_anchor_points_logic == thompson_sampling_anchor_points_logic:
             anchor_points_generator = ThompsonSamplingAnchorPointsGenerator(self.space, sobol_design_type, self.model)
 
         ## -- Select the anchor points (with context)
-        anchor_points = anchor_points_generator.get(duplicate_manager=duplicate_manager, context_manager=self.context_manager)
+        num_anchor = self.kwargs.get('num_anchor', 5)
+        anchor_points = anchor_points_generator.get(num_anchor = num_anchor, duplicate_manager=duplicate_manager, context_manager=self.context_manager)
 
         ## --- Applying local optimizers at the anchor points and update bounds of the optimizer (according to the context)
         optimized_points = [apply_optimizer(self.optimizer, a, f=f, df=None, f_df=f_df, duplicate_manager=duplicate_manager, context_manager=self.context_manager, space = self.space) for a in anchor_points]
