@@ -138,11 +138,15 @@ class BayesianOptimization(BO):
 
         # This states how the discrete variables are handled (exact search or rounding)
         self.acquisition_optimizer_type = acquisition_optimizer_type
-        self.acquisition_optimizer = AcquisitionOptimizer(self.space, self.acquisition_optimizer_type, model=self.model)  ## more arguments may come here
+        num_samples = self.kwargs.get('optim_num_samples', 1000)
+        num_anchor = self.kwargs.get('optim_num_anchor', 5)
+        self.acquisition_optimizer = AcquisitionOptimizer(self.space, self.acquisition_optimizer_type, model=self.model, 
+                                    num_samples=num_samples, num_anchor=num_anchor)  ## NEWFS more arguments may come here
 
         # --- CHOOSE acquisition function. If an instance of an acquisition is passed (possibly user defined), it is used.
         self.acquisition_type = acquisition_type
-
+        self.acquisition_jitter = self.kwargs.get('acquisition_jitter', 0)
+        self.acquisition_weight = self.kwargs.get('acquisition_weight',2)
         if 'acquisition' in self.kwargs:
             if isinstance(kwargs['acquisition'], GPyOpt.acquisitions.AcquisitionBase):
                 self.acquisition = kwargs['acquisition']
@@ -151,7 +155,8 @@ class BayesianOptimization(BO):
             else:
                 self.acquisition = self._acquisition_chooser()
         else:
-            self.acquisition = self.acquisition = self._acquisition_chooser()
+
+            self.acquisition =  self._acquisition_chooser()
 
 
         # --- CHOOSE evaluator method
@@ -175,7 +180,9 @@ class BayesianOptimization(BO):
         return self.problem_config.model_creator(self.model_type, self.exact_feval,self.space)
 
     def _acquisition_chooser(self):
-        return self.problem_config.acquisition_creator(self.acquisition_type, self.model, self.space, self.acquisition_optimizer, self.cost.cost_withGradients)
+        return self.problem_config.acquisition_creator(self.acquisition_type, self.model, self.space, 
+                self.acquisition_optimizer, self.cost.cost_withGradients, acquisition_weight= self.acquisition_weight, 
+                acquisition_jitter = self.acquisition_jitter)
 
     def _evaluator_chooser(self):
         return self.problem_config.evaluator_creator(self.evaluator_type, self.acquisition, self.batch_size, self.model_type, self.model, self.space, self.acquisition_optimizer)

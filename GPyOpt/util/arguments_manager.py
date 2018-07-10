@@ -39,7 +39,7 @@ class ArgumentsManager(object):
 
 
 
-    def acquisition_creator(self, acquisition_type, model, space, acquisition_optimizer, cost_withGradients):
+    def acquisition_creator(self, acquisition_type, model, space, acquisition_optimizer, cost_withGradients, **kwargs):
 
         """
         Acquisition chooser from the available options. Extra parameters can be passed via **kwargs.
