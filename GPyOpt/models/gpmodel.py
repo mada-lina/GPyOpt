@@ -77,6 +77,7 @@ class GPModel(BOModel):
         """
         Updates the model with new observations.
         """
+        
         if self.model is None:
             self._create_model(X_all, Y_all)
         else:
@@ -173,6 +174,182 @@ class GPModel(BOModel):
         Given the current posterior, computes the covariance between two sets of points.
         """
         return self.model.posterior_covariance_between_points(x1, x2)
+    
+    
+class GPStacked(GPModel):
+    """
+    Stacked Models (cf.google Vizier paper)
+    :param alpha
+    :param prev previous regressor
+
+    :other cf. GPMolde
+    .. Note:: This model does Maximum likelihood estimation of the hyper-parameters.
+    """
+    analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
+
+    def __init__(self, prev = None, alpha=1, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False):
+        self.alpha = alpha
+        self.prev = prev        
+        super(GPStacked,self).__init__(kernel=kernel, noise_var=noise_var, 
+             exact_feval=exact_feval, optimizer=optimizer, max_iters=max_iters, 
+             optimize_restarts=optimize_restarts, sparse=sparse, 
+             num_inducing=num_inducing, verbose=verbose, ARD=ARD)
+
+    def _get_residuals(self, X, Y):
+        residu = Y - self.prev._predict(X)
+        return residu
+    
+    def _create_model(self, X, Y):
+        """
+        Creates the model given some input data X and Y.
+        """
+        Y_res = self._get_residuals(X, Y)
+
+        # --- define kernel
+        self.input_dim = X.shape[1]
+        if self.kernel is None:
+            kern = GPy.kern.Matern52(self.input_dim, variance=1., ARD=self.ARD) #+ GPy.kern.Bias(self.input_dim)
+        else:
+            kern = self.kernel
+            self.kernel = None
+
+        # --- define model
+        noise_var = Y_res.var()*0.01 if self.noise_var is None else self.noise_var
+
+        if not self.sparse:
+            self.model = GPy.models.GPRegression(X, Y_res, kernel=kern, noise_var=noise_var)
+        else:
+            self.model = GPy.models.SparseGPRegression(X, Y_res, kernel=kern, num_inducing=self.num_inducing)
+
+        # --- restrict variance if exact evaluations of the objective
+        if self.exact_feval:
+            self.model.Gaussian_noise.constrain_fixed(1e-6, warning=False)
+        else:
+            # --- We make sure we do not get ridiculously small residual noise variance
+            self.model.Gaussian_noise.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
+
+    def updateModel(self, X_all, Y_all, X_new, Y_new):
+        """
+        Updates the model with new observations.
+        """
+        Y_all_res = self._get_residuals(X_all, Y_all)
+        if self.model is None:
+            self._create_model(X_all, Y_all_res)
+        else:
+            self.model.set_XY(X_all, Y_all_res)
+
+        # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
+        if self.max_iters > 0:
+            # --- update the model maximizing the marginal likelihood.
+            if self.optimize_restarts==1:
+                self.model.optimize(optimizer=self.optimizer, max_iters = self.max_iters, messages=False, ipython_notebook=False)
+            else:
+                self.model.optimize_restarts(num_restarts=self.optimize_restarts, optimizer=self.optimizer, max_iters = self.max_iters, verbose=self.verbose)
+
+    def _predict(self, X, full_cov, include_likelihood):
+        if X.ndim == 1:
+            X = X[None,:]
+        m, v = self.model.predict(X, full_cov=full_cov, include_likelihood=include_likelihood)
+        v = np.clip(v, 1e-10, np.inf)
+        return m, v
+
+    def predict(self, X, with_noise=True):
+        """
+        Predictions with the model. Returns posterior means and standard deviations at X.
+        According to algo. in google Vizier
+
+        Parameters:
+            X (np.ndarray) - points to run the prediction for.
+            with_noise (bool) - whether to add noise to the prediction. Default is True.
+        """
+        m, v = self._predict(X, False, with_noise)
+        m_prev, v_prev = self.prev.predict(X, with_noise)
+        D_new = len(self.nodel.Y)
+        D_old = len(self.prev.Y)
+        beta = (self.alpha * D_new)/ (self.alpha * D_new + self.alpha * D_old)
+        m_new = m + m_prev 
+        v_new = np.sqrt(v)**beta * np.sqrt(v_prev)**(1-beta)
+        # We can take the square root because v is just a diagonal matrix of variances
+        return m_new, v_new 
+
+    def predict_covariance(self, X, with_noise=True):
+        """
+        Predicts the covariance matric for points in X.
+
+        Parameters:
+            X (np.ndarray) - points to run the prediction for.
+            with_noise (bool) - whether to add noise to the prediction. Default is True.
+        """
+        #_, v = self._predict(X, True, with_noise)
+        #_, v_prev = self.prev._predict(X, True, with_noise)
+        #D_new = len(self.nodel.Y)
+        #D_old = len(self.prev.Y)
+        #beta = (self.alpha * D_new)/ (self.alpha * D_new + self.alpha * D_old)
+        # return         v**(2*beta) * v_prev**(2*(1-beta))
+        raise NotImplementedError()
+
+    def get_fmin(self):
+        """
+        Returns the location where the posterior mean is takes its minimal value.
+        """
+        return self.predict(self.model.X)[0].min()
+
+    def predict_withGradients(self, X):
+        """
+        Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
+        prev is frozen ==> mean sd gradient comes only from the current model
+        """
+        if X.ndim==1: X = X[None,:]
+        m, v = self._predict(X)
+        m_prev, v_prev = self.prev.predict(X)
+        D_new = len(self.nodel.Y)
+        D_old = len(self.prev.Y)
+        beta = (self.alpha * D_new)/ (self.alpha * D_new + self.alpha * D_old)
+        m_new = m + m_prev 
+        v_new = np.sqrt(v)**beta * np.sqrt(v_prev)**(1-beta)
+        
+        v_new = np.clip(v_new, 1e-10, np.inf)
+        dmdx, dvdx = self.model.predictive_gradients(X)
+        dmdx = dmdx[:,:,0]
+        dsdx = dvdx / (2*np.sqrt(v))
+
+        return m_new, v_new, dmdx, dsdx
+
+    def copy(self):
+        """
+        Makes a safe copy of the model.
+        """
+        copied_model = GPStacked(prev = self.prev, alpha = self.alpha,
+                            kernel = self.model.kern.copy(),
+                            noise_var=self.noise_var,
+                            exact_feval=self.exact_feval,
+                            optimizer=self.optimizer,
+                            max_iters=self.max_iters,
+                            optimize_restarts=self.optimize_restarts,
+                            verbose=self.verbose,
+                            ARD=self.ARD)
+
+        copied_model._create_model(self.model.X,self.model.Y)
+        copied_model.updateModel(self.model.X,self.model.Y, None, None)
+        return copied_model
+
+    def get_model_parameters(self):
+        """
+        Returns a 2D numpy array with the parameters of the model
+        """
+        return np.atleast_2d(self.model[:])
+
+    def get_model_parameters_names(self):
+        """
+        Returns a list with the names of the parameters of the model
+        """
+        return self.model.parameter_names_flat().tolist()
+
+    def get_covariance_between_points(self, x1, x2):
+        """
+        Given the current posterior, computes the covariance between two sets of points.
+        """
+        return self.model.posterior_covariance_between_points(x1, x2)    
 
 
 class GPModel_MCMC(BOModel):
