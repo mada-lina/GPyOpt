@@ -1,11 +1,11 @@
-from ..models.gpmodel import GPModel, GPModel_MCMC
+from ..models.gpmodel import GPModel, GPModel_MCMC, GPStacked
 from ..models.rfmodel import RFModel
 from ..models.warpedgpmodel import WarpedGPModel
 from ..models.input_warped_gpmodel import InputWarpedGPModel
 from ..core.evaluators import Sequential, RandomBatch, LocalPenalization, ThompsonBatch
 from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP
 from ..core.errors import InvalidConfigError
-
+from ..models.base import BOModel
 class ArgumentsManager(object):
     """
     Class to handle extra configurations in the definition of the BayesianOptimization class
@@ -49,8 +49,8 @@ class ArgumentsManager(object):
         space = space
         acquisition_optimizer = acquisition_optimizer
         cost_withGradients = cost_withGradients
-        acquisition_jitter = self.kwargs.get('acquisition_jitter',0.01)
-        acquisition_weight = self.kwargs.get('acquisition_weight',2)
+        acquisition_jitter = kwargs.get('acquisition_jitter',0.01)
+        acquisition_weight = kwargs.get('acquisition_weight',2)
 
         # --- Choose the acquisition
         if acquisition_type is  None or acquisition_type =='EI':
@@ -140,3 +140,9 @@ class ArgumentsManager(object):
             return InputWarpedGPModel(space, input_warping_function, kernel, noise_var,
                                       exact_feval, model_optimizer_type, max_iters,
                                       optimize_restarts, verbosity_model, ARD)
+        elif model_type == 'GP_STACKED':
+            prev = self.kwargs['prev'] # previous regressor should be a       
+            assert ((prev is None) or issubclass(prev, BOModel)), "prev has not the desired type{}".format(type(prev))
+            alpha = self.kwargs.get('alpha', 1)
+            return GPStacked(prev, alpha, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD)
+            
