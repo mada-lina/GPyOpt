@@ -130,6 +130,22 @@ class BO(object):
         self.suggested_sample = self.X
         self.Y_new = self.Y
 
+        #NEWFS
+        if(hasattr(self, '_dynamic_weights')):
+            if(getattr(self, '_dynamic_weights') == 'linear'):
+                maxit = self.max_iter
+                weight_init = self.acquisition.exploration_weight
+                update_weights = True
+                def dynamics_weight(n_iter):
+                    return max(0.000001, weight_init * (1 - n_iter / maxit))
+            else:
+                update_weights = False
+        else:
+            update_weights = False
+            
+        stopping_median = getattr(self, 'stopping_median', False)
+        
+
         # --- Initialize time cost of the evaluations
         while (self.max_time > self.cum_time):
             # --- Update model
@@ -142,6 +158,10 @@ class BO(object):
                     or (len(self.X) > 1 and self._distance_last_evaluations() <= self.eps)):
                 break
 
+            
+            if(update_weights):
+                self.acquisition.exploration_weight = dynamics_weight(self.num_acquisitions)
+            
             self.suggested_sample = self._compute_next_evaluations()
 
             # --- Augment X
@@ -157,6 +177,10 @@ class BO(object):
             if verbosity:
                 print("num acquisition: {}, time elapsed: {:.2f}s".format(
                     self.num_acquisitions, self.cum_time))
+                
+            #New FS Stopping median rule
+            if (stopping_median and (np.median(self.Y[:-1]) < np.squeeze(self.Y[-1]))):
+                break
 
         # --- Stop messages and execution time
         self._compute_results()
