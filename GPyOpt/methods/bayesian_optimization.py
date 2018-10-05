@@ -11,7 +11,7 @@ from ..core.task.cost import CostModel
 from ..experiment_design import initial_design
 from ..util.arguments_manager import ArgumentsManager
 from ..core.evaluators import Sequential, RandomBatch, LocalPenalization, ThompsonBatch
-from ..models.gpmodel import GPModel, GPModel_MCMC
+from ..models.gpmodel import GPModel, GPModel_MCMC, GPModelCustomLik, GPStacked
 from ..models.rfmodel import RFModel
 from ..models.warpedgpmodel import WarpedGPModel
 from ..models.input_warped_gpmodel import InputWarpedGPModel
