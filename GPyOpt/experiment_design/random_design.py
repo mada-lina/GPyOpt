@@ -23,10 +23,12 @@ class RandomDesign(ExperimentDesign):
         Draw random samples and only save those that satisfy constraints
         Finish when required number of samples is generated
         """
+        n_more = 100
+
         samples = np.empty((0, self.space.dimensionality))
 
         while samples.shape[0] < init_points_count:
-            domain_samples = self.get_samples_without_constraints(init_points_count)
+            domain_samples = self.get_samples_without_constraints(init_points_count*n_more)
             valid_indices = (self.space.indicator_constraints(domain_samples) == 1).flatten()
             if sum(valid_indices) > 0:
                 valid_samples = domain_samples[valid_indices,:]
