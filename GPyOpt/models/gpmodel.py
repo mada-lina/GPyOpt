@@ -28,7 +28,8 @@ class GPModel(BOModel):
 
     analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
 
-    def __init__(self, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False):
+    def __init__(self, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, 
+        optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False):
         self.kernel = kernel
         self.noise_var = noise_var
         self.exact_feval = exact_feval
@@ -198,10 +199,23 @@ class GPModelCustomLik(BOModel):
 
 
     analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
+    _inf_method_map = {'EP':GPy.inference.latent_function_inference.expectation_propagation.EP, 
+                        'Laplace':GPy.inference.latent_function_inference.Laplace}
+    _likelihood_map = {'Bernouilli':GPy.likelihoods.Bernoulli, 'Binomial':GPy.likelihoods.Binomial}
 
-    def __init__(self, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', 
+    def __init__(self, likelihood = 'Bernouilli',  inf_method = 'Laplace', gp_link=None, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', 
                  max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  
-                 verbose=True, ARD=False, likelihood = None, inf_method = None):
+                 verbose=True, ARD=False):
+        """
+        Two new parameters:
+            - inf_method: Inference method used to deqal with the non default likelihood
+            - gp_link: link (map between f(x) and the probability distribution used to draw the 
+                observations by default None implies a probit link)
+        NOTES
+        ----
+        - include likelihood is set by default to False
+
+        """
         self.kernel = kernel
         self.noise_var = noise_var
         self.exact_feval = exact_feval
@@ -213,15 +227,20 @@ class GPModelCustomLik(BOModel):
         self.num_inducing = num_inducing
         self.model = None
         self.ARD = ARD
-        if(likelihood is None):
-            self.likelihood = GPy.likelihoods.Bernoulli()
-        else:
-            self.likelihood = likelihood
-        if(inf_method is None):
-            self.inf_meth = GPy.inference.latent_function_inference.expectation_propagation.EP()
-        else:
-            self.inf_meth = inf_method
+        split_likelihood = likelihood.split("_")
+        self.likelihood = self._likelihood_map[split_likelihood[0]](gp_link = gp_link)
+        self.nb_obs = int(split_likelihood[1]) if(split_likelihood[0] == 'Binomial') else 1
+        self.inf_meth = self._inf_method_map[inf_method]()
     
+
+    
+    def _gen_YData(self, Y):
+        """
+        Gen Y metadata to match the shape of Y. Used for Binomial likelihood
+        """
+        return {'trials':np.ones_like(Y) * self.nb_obs}
+
+
     @staticmethod
     def fromConfig(config):
         return GPModel(**config)
@@ -240,21 +259,20 @@ class GPModelCustomLik(BOModel):
             self.kernel = None
 
         # --- define model
-        noise_var = Y.var()*0.01 if self.noise_var is None else self.noise_var
+        if not(self.exact_feval):
+            noise_var = Y.var()*0.01 if self.noise_var is None else self.noise_var
+            kern += GPy.kern.White(self.input_dim, noise_var)
 
         if not self.sparse:
-            self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var, 
-                                                 inference_method=self.inf_meth, likelihood=self.likelihood)
+            Y_metadata= self._gen_YData(Y)
+            self.model = GPy.core.GP(X, Y, kernel=kern, inference_method=self.inf_meth, likelihood=self.likelihood, normalizer=False, Y_metadata = Y_metadata)
         else:
-            self.model = GPy.models.SparseGPRegression(X, Y, kernel=kern, num_inducing=self.num_inducing,
-                                                       inference_method=self.inf_meth, likelihood=self.likelihood)
+            raise NotImplementedError()
 
         # --- restrict variance if exact evaluations of the objective
-        if self.exact_feval:
-            self.model.Gaussian_noise.constrain_fixed(1e-6, warning=False)
-        else:
+        if not(self.exact_feval):
             # --- We make sure we do not get ridiculously small residual noise variance
-            self.model.Gaussian_noise.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
+            self.model.kern.white.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
 
     def updateModel(self, X_all, Y_all, X_new, Y_new):
         """
@@ -264,6 +282,7 @@ class GPModelCustomLik(BOModel):
         if self.model is None:
             self._create_model(X_all, Y_all)
         else:
+            self.model.Y_metadata = self._gen_YData(Y_all)
             self.model.set_XY(X_all, Y_all)
 
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
@@ -281,7 +300,7 @@ class GPModelCustomLik(BOModel):
         v = np.clip(v, 1e-10, np.inf)
         return m, v
 
-    def predict(self, X, with_noise=True):
+    def predict(self, X, with_noise=False):
         """
         Predictions with the model. Returns posterior means and standard deviations at X. 
         Note that this is different in GPy where the variances are given.
@@ -289,6 +308,11 @@ class GPModelCustomLik(BOModel):
         Parameters:
             X (np.ndarray) - points to run the prediction for.
             with_noise (bool) - whether to add noise to the prediction. Default is True.
+
+        Notes:
+            include with_noise is now by default set to False.
+            This has several implications all over the place
+    
         """
         m, v = self._predict(X, False, with_noise)
         # We can take the square root because v is just a diagonal matrix of variances
@@ -305,18 +329,18 @@ class GPModelCustomLik(BOModel):
         _, v = self._predict(X, True, with_noise)
         return v
 
-    def get_fmin(self):
+    def get_fmin(self, include_likelihood = False):
         """
         Returns the location where the posterior mean is takes its minimal value.
         """
-        return self.model.predict(self.model.X)[0].min()
+        return self.model.predict(self.model.X, include_likelihood=include_likelihood)[0].min()
 
-    def predict_withGradients(self, X):
+    def predict_withGradients(self, X,include_likelihood = False):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
         """
         if X.ndim==1: X = X[None,:]
-        m, v = self.model.predict(X)
+        m, v = self.model.predict(X, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
         dmdx, dvdx = self.model.predictive_gradients(X)
         dmdx = dmdx[:,:,0]
