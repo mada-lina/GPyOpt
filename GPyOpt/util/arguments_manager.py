@@ -1,4 +1,4 @@
-from ..models.gpmodel import GPModel, GPModel_MCMC, GPStacked
+from ..models.gpmodel import GPModel, GPModel_MCMC, GPStacked, GPModelCustomLik
 from ..models.rfmodel import RFModel
 from ..models.warpedgpmodel import WarpedGPModel
 from ..models.input_warped_gpmodel import InputWarpedGPModel
@@ -90,17 +90,14 @@ class ArgumentsManager(object):
         model_optimizer_type = self.kwargs.get('model_optimizer_type','lbfgs')
         max_iters = self.kwargs.get('max_iters',1000)
         optimize_restarts = self.kwargs.get('optimize_restarts',5)
-
+        sparse = True if model_type == 'sparseGP' else False
+        optimize_restarts = self.kwargs.get('optimize_restarts',5)
+        num_inducing = self.kwargs.get('num_inducing',10)        
+        
         # --------
         # --- Initialize GP model with MLE on the parameters
         # --------
         if model_type == 'GP' or model_type == 'sparseGP':
-            if model_type == 'GP':
-                sparse = False
-            if model_type == 'sparseGP':
-                sparse = True
-            optimize_restarts = self.kwargs.get('optimize_restarts',5)
-            num_inducing = self.kwargs.get('num_inducing',10)
             return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD)
 
         # --------
@@ -136,7 +133,6 @@ class ArgumentsManager(object):
 
             # Only support Kumar warping now, setting it to None will use default Kumar warping
             input_warping_function = None
-            optimize_restarts = self.kwargs.get('optimize_restarts',5)
             return InputWarpedGPModel(space, input_warping_function, kernel, noise_var,
                                       exact_feval, model_optimizer_type, max_iters,
                                       optimize_restarts, verbosity_model, ARD)
@@ -144,5 +140,11 @@ class ArgumentsManager(object):
             prev = self.kwargs['prev'] # previous regressor should be a       
             assert ((prev is None) or issubclass(prev, BOModel)), "prev has not the desired type{}".format(type(prev))
             alpha = self.kwargs.get('alpha', 1)
-            return GPStacked(prev, alpha, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD)
+            return GPStacked(prev, alpha, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, False, 10, verbosity_model, ARD)
             
+        elif model_type == 'GP_CUSTOM_LIK':
+            likelihood = self.kwargs.get('likelihood', 'Bernouilly_10') # previous regressor should be a       
+            inf_method = self.kwargs.get('inf_method', 'EP')
+            gp_link = self.kwargs.get('gp_link')
+            return GPModelCustomLik(likelihood, inf_method, gp_link, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, False,
+                10, verbosity_model, ARD)
