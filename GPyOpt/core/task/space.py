@@ -60,7 +60,7 @@ class Design_space(object):
 
     """
 
-    supported_types = ['continuous', 'discrete', 'bandit','categorical']
+    supported_types = ['continuous', 'discrete', 'bandit', 'categorical']
 
     def __init__(self, space, constraints=None, store_noncontinuous = False):
 
@@ -297,14 +297,21 @@ class Design_space(object):
     def indicator_constraints(self,x):
         """
         Returns array of ones and zeros indicating if x is within the constraints
+        Constraints now can be given as str or functions
         """
         x = np.atleast_2d(x)
         I_x = np.ones((x.shape[0],1))
         if self.constraints is not None:
             for d in self.constraints:
                 try:
-                    exec('constraint = lambda x:' + d['constraint'], globals())
-                    ind_x = (constraint(x)<0)*1
+                    if isinstance(d['constraint'], str):
+                        #exec('constraint = lambda x:' + d['constraint'], globals())
+                        constraint = eval('lambda x:' + d['constraint'], globals())
+                        res_constraint = constraint(x)
+                    else:
+                        constraint = d['constraint']
+                        res_constraint = constraint(x)
+                    ind_x = (res_constraint<0)*1
                     I_x *= ind_x.reshape(x.shape[0],1)
                 except:
                     print('Fail to compile the constraint: ' + str(d))
