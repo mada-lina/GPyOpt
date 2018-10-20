@@ -4,13 +4,17 @@ from .base import ExperimentDesign
 from ..core.task.variables import BanditVariable, DiscreteVariable, CategoricalVariable
 
 
-class RandomDesign(ExperimentDesign):
+class RandomDesignStep(ExperimentDesign):
     """
     Random experiment design.
     Random values for all variables within the given bounds.
     """
-    def __init__(self, space):
-        super(RandomDesign, self).__init__(space)
+    def __init__(self, space, step=0.2, beg = 0, end = 1):
+        super(RandomDesignStep, self).__init__(space)
+        self.step = 0.2
+        self.beg = 0
+        self.end = 1
+
 
     def get_samples(self, init_points_count):
         if self.space.has_constraints():
