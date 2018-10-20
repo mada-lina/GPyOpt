@@ -154,8 +154,11 @@ class BO(object):
             except np.linalg.linalg.LinAlgError:
                 break
 
-            if (self.num_acquisitions >= self.max_iter
-                    or (len(self.X) > 1 and self._distance_last_evaluations() <= self.eps)):
+            if (self.num_acquisitions >= self.max_iter):
+                break
+
+            if (len(self.X) > 1 and self._distance_last_evaluations() <= self.eps)
+                print("distance last evaluation = {0}".format(self._distance_last_evaluations()))
                 break
 
             
