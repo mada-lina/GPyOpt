@@ -8,7 +8,7 @@ from pylab import savefig
 import pylab
 
 
-def plot_acquisition(bounds,input_dim,model,Xdata,Ydata,acquisition_function,suggested_sample, filename = None):
+def plot_acquisition(bounds,input_dim,model,Xdata,Ydata,acquisition_function,suggested_sample, filename = None, flo_mode = False):
     '''
     Plots of the model and the acquisition function in 1D and 2D examples.
     '''
@@ -61,14 +61,14 @@ def plot_acquisition(bounds,input_dim,model,Xdata,Ydata,acquisition_function,sug
         plt.plot(x_grid, m+1.96*np.sqrt(v), 'k-', alpha=0.2)
 
         plt.plot(Xdata, Ydata, 'r.', markersize=10)
-        plt.axvline(x=suggested_sample[len(suggested_sample)-1],color='r')
+        
         factor = max(m+1.96*np.sqrt(v))-min(m-1.96*np.sqrt(v))
-
-        plt.plot(x_grid,0.2*factor*acqu_normalized-abs(min(m-1.96*np.sqrt(v)))-0.25*factor, 'r-',lw=2,label ='Acquisition (arbitrary units)')
+        if(not(flo_mode)):
+            plt.axvline(x=suggested_sample[len(suggested_sample)-1],color='r')
+            plt.plot(x_grid,0.2*factor*acqu_normalized-abs(min(m-1.96*np.sqrt(v)))-0.25*factor, 'r-',lw=2,label ='Acquisition (arbitrary units)')
         plt.xlabel('x')
         plt.ylabel('f(x)')
         plt.ylim(min(m-1.96*np.sqrt(v))-0.25*factor,  max(m+1.96*np.sqrt(v))+0.05*factor)
-        plt.axvline(x=suggested_sample[len(suggested_sample)-1],color='r')
         plt.legend(loc='upper left')
 
 

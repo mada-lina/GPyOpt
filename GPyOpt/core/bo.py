@@ -288,7 +288,7 @@ class BO(object):
         else:
             self.model_parameters_iterations = np.vstack((self.model_parameters_iterations,self.model.get_model_parameters()))
 
-    def plot_acquisition(self,filename=None):
+    def plot_acquisition(self,filename=None, flo_mode=False):
         """
         Plots the model and the acquisition function.
             if self.input_dim = 1: Plots data, mean and variance in one plot and the acquisition function in another plot
@@ -313,7 +313,8 @@ class BO(object):
                                 model_to_plot.model.Y,
                                 self.acquisition.acquisition_function,
                                 self.suggest_next_locations(),
-                                filename)
+                                filename,
+                                flo_mode)
 
     def plot_convergence(self,filename=None):
         """
