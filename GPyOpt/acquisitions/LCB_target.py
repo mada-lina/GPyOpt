@@ -17,10 +17,10 @@ class AcquisitionLCB_target(AcquisitionBase):
     :param jitter: positive value to make the acquisition more explorative
 
     .. Note:: does not allow to be used with cost
-
+    #TODO: Implement gradient
     """
 
-    analytical_gradient_prediction = True
+    analytical_gradient_prediction = False 
 
     def __init__(self, model, space, optimizer=None, cost_withGradients=None, exploration_weight=2, target = None):
         self.optimizer = optimizer
