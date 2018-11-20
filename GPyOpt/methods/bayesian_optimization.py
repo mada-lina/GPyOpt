@@ -2,7 +2,7 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 
-from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionEntropySearch
+from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionEntropySearch, AcquisitionLCB_target, AcquisitionEI_target
 from ..core.bo import BO
 from ..core.errors import InvalidConfigError
 from ..core.task.space import Design_space, bounds_to_space
@@ -46,10 +46,12 @@ class BayesianOptimization(BO):
     :acquisition_type: type of acquisition function to use.
         - 'EI', expected improvement.
         - 'EI_MCMC', integrated expected improvement (requires GP_MCMC model).
+        - 'EI_target', integrated expected improvement for folded distribution.
         - 'MPI', maximum probability of improvement.
         - 'MPI_MCMC', maximum probability of improvement (requires GP_MCMC model).
         - 'LCB', GP-Lower confidence bound.
         - 'LCB_MCMC', integrated GP-Lower confidence bound (requires GP_MCMC model).
+        - 'LCB_target', GP-Lower confidence bound for folded distribution
     :param normalize_Y: whether to normalize the outputs before performing any optimization (default, True).
     :exact_feval: whether the outputs are exact (default False).
     :acquisition_optimizer_type: type of acquisition function to use.
@@ -180,7 +182,7 @@ class BayesianOptimization(BO):
                                                     de_duplication         = self.de_duplication)
 
         #NEWFS
-        if((self.kwargs.get('acquisition_weight_lindec',False)) and (self.acquisition_type == 'LCB')):
+        if((self.kwargs.get('acquisition_weight_lindec',False)) and (self.acquisition_type[:3] == 'LCB')):
             self._dynamic_weights = 'linear'
 
     def _model_chooser(self):

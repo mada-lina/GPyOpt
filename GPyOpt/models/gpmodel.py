@@ -2,9 +2,11 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import numpy as np
+from scipy.stats import norm
 import GPy
 
 from .base import BOModel
+from ..util.general import folded_normal
 
 class GPModel(BOModel):
     """
@@ -128,6 +130,32 @@ class GPModel(BOModel):
         """
         return self.model.predict(self.model.X)[0].min()
 
+
+    def get_fmin_target(self, target = None):
+        """
+        Returns the location where the posterior mean takes the closest value to
+        a target. i.e. when |mean(f(x)) - alpha) is min
+        """
+        if(target is None):
+            return self.get_fmin()
+        else:
+            abs_dev = np.abs(self.model.predict(self.model.X)[0] - target).min()
+        return abs_dev
+
+    def get_fmin_folded_normal(self, target = None):
+        """
+        Returns the location of the point where the mean of |f(x) - tgt| is min
+        Remarks: different from get_fmin_target 
+                 mean(|f(x) - target |) != |mean(f(x)) - target|
+        Use of the mean value of the folded distrib (distrib of |f(x) - target)
+        """
+        if(target is None):
+            return self.get_fmin()
+        else:
+            m,v = self.model.predict(self.model.X)
+            m_folded, _ = folded_normal(m, v)
+        return m_folded.min()
+    
     def predict_withGradients(self, X):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
@@ -331,10 +359,36 @@ class GPModelCustomLik(BOModel):
 
     def get_fmin(self, include_likelihood = False):
         """
-        Returns the location where the posterior mean is takes its minimal value.
+        Returns the location where the posterior mean takes its minimal value.
         """
         return self.model.predict(self.model.X, include_likelihood=include_likelihood)[0].min()
 
+    def get_fmin_target(self, include_likelihood = False, target = None):
+        """
+        Returns the location where the posterior mean takes the closest value to
+        a target.
+        """
+        if(target is None):
+            return self.get_fmin(include_likelihood)
+        else:
+            abs_dev = np.abs(self.model.predict(self.model.X, include_likelihood
+                             =include_likelihood)[0] - target).min()
+        return abs_dev
+
+    def get_fmin_folded_normal(self, include_likelihood = False, target = None):
+        """
+        Returns the location of the point where the mean of |f(x) - tgt| is min
+        Remarks: different from get_fmin_target 
+                 mean(|f(x) - target |) != |mean(f(x)) - target|
+        Use of the mean value of the folded distrib (distrib of |f(x) - target)
+        """
+        if(target is None):
+            return self.get_fmin(include_likelihood)
+        else:
+            m,v = self.model.predict(self.model.X, include_likelihood=include_likelihood)
+            m_folded, _ = folded_normal(m, v)
+        return m_folded.min()
+    
     def predict_withGradients(self, X,include_likelihood = False):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
@@ -496,12 +550,37 @@ class GPStacked(GPModel):
         # return         v**(2*beta) * v_prev**(2*(1-beta))
         raise NotImplementedError()
 
-    def get_fmin(self):
+    def get_fmin(self, include_likelihood = False):
         """
-        Returns the location where the posterior mean is takes its minimal value.
+        Returns the location where the posterior mean takes its minimal value.
         """
-        return self.predict(self.model.X)[0].min()
+        return self.model.predict(self.model.X, include_likelihood=include_likelihood)[0].min()
 
+    def get_fmin_target(self, include_likelihood = False, target = None):
+        """
+        Returns the location where the posterior mean takes the closest value to
+        a target.
+        """
+        if(target is None):
+            return self.get_fmin(include_likelihood)
+        else:
+            abs_dev = np.abs(self.model.predict(self.model.X, include_likelihood
+                             =include_likelihood)[0] - target).min()
+        return abs_dev
+
+    def get_fmin_folded_normal(self, include_likelihood = False, target = None):
+        """
+        Returns the location of the point where the mean of |f(x) - tgt| is min
+        Remarks: different from get_fmin_target 
+                 mean(|f(x) - target |) != |mean(f(x)) - target|
+        Use of the mean value of the folded distrib (distrib of |f(x) - target)
+        """
+        if(target is None):
+            return self.get_fmin(include_likelihood)
+        else:
+            m,v = self.model.predict(self.model.X, include_likelihood=include_likelihood)
+            m_folded, _ = folded_normal(m, v)
+        return m_folded.min()
     def predict_withGradients(self, X):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
@@ -676,6 +755,24 @@ class GPModel_MCMC(BOModel):
         self.model._trigger_params_changed()
 
         return fmins
+
+
+    def get_fmin_target(self, include_likelihood = False, target = None):
+        """
+        Returns the location where the posterior mean takes the closest value to
+        a target.
+        """
+        raise NotImplementedError()
+        
+    def get_fmin_folded_normal(self, include_likelihood = False, target = None):
+        """
+        Returns the location of the point where the mean of |f(x) - tgt| is min
+        Remarks: different from get_fmin_target 
+                 mean(|f(x) - target |) != |mean(f(x)) - target|
+        Use of the mean value of the folded distrib (distrib of |f(x) - target)
+        """
+        raise NotImplementedError()
+
 
     def predict_withGradients(self, X):
         """

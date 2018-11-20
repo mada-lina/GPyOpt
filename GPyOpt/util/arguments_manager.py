@@ -3,7 +3,7 @@ from ..models.rfmodel import RFModel
 from ..models.warpedgpmodel import WarpedGPModel
 from ..models.input_warped_gpmodel import InputWarpedGPModel
 from ..core.evaluators import Sequential, RandomBatch, LocalPenalization, ThompsonBatch
-from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP
+from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionEI_target, AcquisitionLCB_target
 from ..core.errors import InvalidConfigError
 from ..models.base import BOModel
 class ArgumentsManager(object):
@@ -51,6 +51,7 @@ class ArgumentsManager(object):
         cost_withGradients = cost_withGradients
         acquisition_jitter = kwargs.get('acquisition_jitter',0.01)
         acquisition_weight = kwargs.get('acquisition_weight',2)
+        acquisition_ftarget = kwargs.get('acquisition_ftarget')
 
         # --- Choose the acquisition
         if acquisition_type is  None or acquisition_type =='EI':
@@ -58,6 +59,9 @@ class ArgumentsManager(object):
 
         elif acquisition_type =='EI_MCMC':
             return AcquisitionEI_MCMC(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter)
+
+        elif acquisition_type =='EI_target':
+            return AcquisitionEI_target(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter, acquisition_ftarget)
 
         elif acquisition_type =='MPI':
             return AcquisitionMPI(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter)
@@ -67,6 +71,9 @@ class ArgumentsManager(object):
 
         elif acquisition_type =='LCB':
             return AcquisitionLCB(model, space, acquisition_optimizer, None, acquisition_weight)
+        
+        elif acquisition_type =='LCB_target':
+            return AcquisitionLCB_target(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget)
 
         elif acquisition_type =='LCB_MCMC':
             return AcquisitionLCB_MCMC(model, space, acquisition_optimizer, None, acquisition_weight)

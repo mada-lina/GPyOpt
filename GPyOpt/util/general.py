@@ -3,6 +3,7 @@
 
 import numpy as np
 from scipy.special import erfc
+import scipy.stats as stats
 import time
 from ..core.errors import InvalidConfigError
 
@@ -232,3 +233,16 @@ def normalize(Y, normalization_type='stats'):
         raise ValueError('Unknown normalization type: {}'.format(normalization_type))
 
     return Y_norm
+
+
+def folded_normal(m, s):
+    """ From a given RV X ~ N(m, s^2) get the mean and standard deviation 
+    of the distribution of |X|
+    
+    """
+    mbys = m/s
+    dev = 0.5 * mbys * mbys 
+    m_folded = s * np.sqrt(2 / np.pi) * np.exp(- dev) + m * (1 - 2 * stats.norm.cdf(-mbys))
+    s_folded = m * m + s * s - m_folded * m_folded    
+    return m_folded, s_folded
+    
