@@ -39,14 +39,16 @@ class AcquisitionEI_target(AcquisitionBase):
         """ Computes the Expected Improvement per unit of cost.
         New formula 
         """
-        m, s = self.model.predict(x)
-        fmin = self.model.get_fmin_folded_normal()
         t = self.target
+        m, s = self.model.predict(x)
+        fmin = self.model.get_fmin_folded_normal(target = t)
         phi_a, Phi_a, a = get_quantiles(self.jitter, fmin, -(m-t), s)
-        phi_b, Phi_b, b = get_quantiles(self.jitter, 0, (m-t), s)
+        phi_b, Phi_b, b = get_quantiles(self.jitter, 0, -(m-t), s)
         phi_c, Phi_c, c = get_quantiles(self.jitter, fmin, (m-t), s)
         
-        f_acqu = s * (a * (Phi_a - Phi_b) + c * (Phi_b + Phi_c - 1) + phi_a + phi_c - 2 * phi_b)
+        #f_acqu = s * (a * (Phi_a - Phi_b) + c * (Phi_b + Phi_c - 1) + phi_a + phi_c - 2 * phi_b)
+        f_acqu = s * (c * (Phi_b + Phi_c - 1) + phi_c -phi_b)
+        f_acqu += s * (a * (Phi_a - Phi_b) + phi_a - phi_b)
         return f_acqu
 
     def _compute_acq_withGradients(self, x):

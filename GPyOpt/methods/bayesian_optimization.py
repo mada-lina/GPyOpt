@@ -148,7 +148,8 @@ class BayesianOptimization(BO):
         # --- CHOOSE acquisition function. If an instance of an acquisition is passed (possibly user defined), it is used.
         self.acquisition_type = acquisition_type
         self.acquisition_jitter = self.kwargs.get('acquisition_jitter', 0)
-        self.acquisition_weight = self.kwargs.get('acquisition_weight',2)    
+        self.acquisition_weight = self.kwargs.get('acquisition_weight',2)
+        self.acquisition_ftarget = self.kwargs.get('acquisition_ftarget')
         if 'acquisition' in self.kwargs:
             if isinstance(kwargs['acquisition'], GPyOpt.acquisitions.AcquisitionBase):
                 self.acquisition = kwargs['acquisition']
@@ -191,7 +192,7 @@ class BayesianOptimization(BO):
     def _acquisition_chooser(self):
         return self.problem_config.acquisition_creator(self.acquisition_type, self.model, self.space, 
                 self.acquisition_optimizer, self.cost.cost_withGradients, acquisition_weight= self.acquisition_weight, 
-                acquisition_jitter = self.acquisition_jitter)
+                acquisition_jitter = self.acquisition_jitter, acquisition_ftarget = self.acquisition_ftarget)
 
     def _evaluator_chooser(self):
         return self.problem_config.evaluator_creator(self.evaluator_type, self.acquisition, self.batch_size, self.model_type, self.model, self.space, self.acquisition_optimizer)

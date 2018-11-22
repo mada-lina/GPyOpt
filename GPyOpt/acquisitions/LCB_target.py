@@ -35,7 +35,6 @@ class AcquisitionLCB_target(AcquisitionBase):
         Computes the GP-Lower Confidence Bound 
         Use the mean and var of the folded distrib
         """
-        raise NotImplementedError
         m, s = self.model.predict(x)
         m_folded, s_folded = folded_normal(m - self.target, s)
         f_acqu = - m_folded + self.exploration_weight * s_folded
