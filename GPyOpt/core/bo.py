@@ -151,6 +151,7 @@ class BO(object):
             # --- Update model
             try:
                 self._update_model(self.normalization_type)
+                
             except np.linalg.linalg.LinAlgError:
                 break
 
@@ -274,6 +275,8 @@ class BO(object):
             # Y_inmodel is the output that goes into the model
             if self.normalize_Y:
                 Y_inmodel = normalize(self.Y, normalization_type)
+                if hasattr(self.acquisition, 'target'):
+                    self.acquisition.target = (self.acquisition_ftarget- self.Y.mean())/self.Y.std()
             else:
                 Y_inmodel = self.Y
 
