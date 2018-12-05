@@ -12,6 +12,7 @@ from ..util.duplicate_manager import DuplicateManager
 from ..core.errors import InvalidConfigError
 from ..core.task.cost import CostModel
 from ..optimization.acquisition_optimizer import ContextManager
+from ..models import GPModelCustomLik
 try:
     from ..plotting.plots_bo import plot_acquisition, plot_convergence
 except:
@@ -160,7 +161,8 @@ class BO(object):
 
             if (len(self.X) > 1 and self._distance_last_evaluations() <= self.eps):
                 print("distance last evaluation = {0}".format(self._distance_last_evaluations()))
-                break
+                if(not(isinstance(self.model, GPModelCustomLik))):
+                    break
 
             
             if(update_weights):
