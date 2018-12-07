@@ -220,6 +220,28 @@ class BO(object):
                 self.initial_iter = False
 
 
+    # def add_new_sample(self):
+    #     """
+    #     When evaluation takes place at the same location (i.e. X) and likelihood is binomial
+    #     aggrgate count
+    #     """
+    #     X_new = self.suggested_sample
+    #     Y_new, cost_new = self.objective.evaluate(X_new)
+    #     if(not(isinstance(self.model, GPModelCustomLik))):
+    #         self.Y = np.vstack((self.Y,self.Y_new))
+    #         self.X = np.vstack((self.X, self.suggested_sample))    
+    #     else:
+    #         same = [np.allclose(x, X_new) for x in self.X]
+    #         if(np.any(same)):
+    #             index = np.argmax(same)
+    #             self.Y[index] += Y_new
+                
+    #         else:
+    #             self.Y = np.vstack((self.Y,self.Y_new))
+    #             self.X = np.vstack((self.X, self.suggested_sample))    
+    #     self.cost.update_cost_model(self.suggested_sample, cost_new)
+        
+
     def evaluate_objective(self):
         """
         Evaluates the objective
