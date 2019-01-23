@@ -53,6 +53,7 @@ class BO(object):
         self.context = None
         self.num_acquisitions = 0
 
+
     def suggest_next_locations(self, context = None, pending_X = None, ignored_X = None):
         """
         Run a single optimization step and return the next locations to evaluate the objective.
@@ -127,6 +128,9 @@ class BO(object):
         # --- Initialize iterations and running time
         self.time_zero = time.time()
         self.cum_time  = 0
+        self.cum_time_fit  = 0
+        self.cum_time_suggest = 0
+
         self.num_acquisitions = 0
         self.suggested_sample = self.X
         self.Y_new = self.Y
@@ -151,8 +155,9 @@ class BO(object):
         while (self.max_time > self.cum_time):
             # --- Update model
             try:
+                ttmp = time.time()
                 self._update_model(self.normalization_type)
-                
+                self.cum_time_fit += time.time() - ttmp
             except np.linalg.linalg.LinAlgError:
                 break
 
@@ -168,7 +173,9 @@ class BO(object):
             if(update_weights):
                 self.acquisition.exploration_weight = dynamics_weight(self.num_acquisitions)
             
+            ttmp = time.time()
             self.suggested_sample = self._compute_next_evaluations()
+            self.cum_time_suggest += time.time() - ttmp
 
             # --- Augment X
             self.X = np.vstack((self.X,self.suggested_sample))
@@ -219,6 +226,33 @@ class BO(object):
                 print('** GPyOpt Bayesian Optimization class initialized successfully **')
                 self.initial_iter = False
 
+    def get_best(self):
+        """ return location of the best point both x, y seen and expected (i.e. based on  the 
+        expected values at locations already seen)"""
+        self._update_model()
+        tgt = self.acquisition.target if hasattr(self.acquisition, 'target') else None
+        
+        mu, _ = self.model.get_model_predict() # prediction
+        x, y = self.model.get_model_data() # data seen by the GPy model (i.e. may be normalized)
+
+        if tgt is not None:
+            assert np.size(tgt) == mu.shape[1]
+            assert np.size(tgt) == y.shape[1]
+            mu_tgt = np.average(np.abs(mu - np.repeat(np.squeeze(tgt)[np.newaxis, :], len(mu), 0)), 1)
+            y_tgt = np.average(np.abs(y - np.repeat(np.squeeze(tgt)[np.newaxis, :], len(y), 0)), 1)
+        else:
+            mu_tgt = mu
+            y_tgt = y
+
+        best_seen =  np.argmin(y_tgt)
+        best_exp = np.argmin(mu_tgt)
+        x_seen = x[best_seen]
+        y_seen = y[best_seen]
+        x_exp = x[best_exp]
+        y_exp = mu[best_exp]
+
+        return (x_seen, y_seen), (x_exp, y_exp)
+
 
     # def add_new_sample(self):
     #     """
@@ -254,9 +288,10 @@ class BO(object):
         """
         Computes the optimum and its value.
         """
-        self.Y_best = best_value(self.Y)
-        self.x_opt = self.X[np.argmin(self.Y),:]
-        self.fx_opt = np.min(self.Y)
+        Y_avg = np.average(self.Y, 1)[:, None] 
+        self.Y_best = best_value(Y_avg)
+        self.x_opt = self.X[np.argmin(Y_avg),:]
+        self.fx_opt = np.min(Y_avg)
 
     def _distance_last_evaluations(self):
         """
@@ -298,12 +333,14 @@ class BO(object):
 
             # Y_inmodel is the output that goes into the model
             if self.normalize_Y:
-                Y_inmodel = normalize(self.Y, normalization_type)
                 if hasattr(self.acquisition, 'target'):
-                    self.acquisition.target = (self.acquisition_ftarget- self.Y.mean())/self.Y.std()
+                    Y_inmodel, target_inmodel = normalize(self.Y, normalization_type, target = self.acquisition_ftarget)
+                    self.acquisition.target = target_inmodel
+                else:
+                    Y_inmodel = normalize(self.Y, normalization_type)
+
             else:
                 Y_inmodel = self.Y
-
             self.model.updateModel(X_inmodel, Y_inmodel, None, None)
 
         # Save parameters of the model
