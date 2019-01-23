@@ -2,11 +2,13 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import numpy as np
+import itertools
 from scipy.stats import norm
 import GPy
 
 from .base import BOModel
 from ..util.general import folded_normal
+from ..util import multioutput
 
 class GPModel(BOModel):
     """
@@ -31,7 +33,7 @@ class GPModel(BOModel):
     analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
 
     def __init__(self, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, 
-        optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False):
+        optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False, mo=None):
         self.kernel = kernel
         self.noise_var = noise_var
         self.exact_feval = exact_feval
@@ -43,7 +45,17 @@ class GPModel(BOModel):
         self.num_inducing = num_inducing
         self.model = None
         self.ARD = ARD
-
+        
+        # workaround to deal with multiple output
+        if mo is not None:
+            self.mo_flag = True
+            self.mo_output_dim = mo['output_dim'] 
+            self.mo_rank =  mo['rank']
+            self.mo_missing = mo.get('missing', False)
+            self.mo_kappa = mo.get('kappa')
+        else:
+            self.mo_flag = False
+            self.mo_output_dim = 1
     @staticmethod
     def fromConfig(config):
         return GPModel(**config)
@@ -61,13 +73,25 @@ class GPModel(BOModel):
             kern = self.kernel
             self.kernel = None
 
-        # --- define model
-        noise_var = Y.var()*0.01 if self.noise_var is None else self.noise_var
+        noise_var = np.average(Y.var(0))*0.01 if self.noise_var is None else self.noise_var
+
+
 
         if not self.sparse:
-            self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var)
+            if self.mo_flag:
+                self.X_ext, self.Y_ext = multioutput.extend_XY(X, Y, self.mo_output_dim)
+                self.X_init = X
+                kern = kern ** GPy.kern.Coregionalize(1, output_dim=self.mo_output_dim, rank=self.mo_rank, kappa = self.mo_kappa)
+                self.model = GPy.models.GPRegression(self.X_ext, self.Y_ext, kern, Y_metadata={'output_index':self.X_ext[:, -1][:,np.newaxis]})
+            else:
+                self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var)
+        
         else:
-            self.model = GPy.models.SparseGPRegression(X, Y, kernel=kern, num_inducing=self.num_inducing)
+            if self.mo_flag:
+                raise NotImplementedError()
+
+            else:
+                self.model = GPy.models.SparseGPRegression(X, Y, kernel=kern, num_inducing=self.num_inducing)
 
         # --- restrict variance if exact evaluations of the objective
         if self.exact_feval:
@@ -84,7 +108,12 @@ class GPModel(BOModel):
         if self.model is None:
             self._create_model(X_all, Y_all)
         else:
-            self.model.set_XY(X_all, Y_all)
+            if self.mo_flag:
+                self.X_ext, self.Y_ext = multioutput.extend_XY(X_all, Y_all, self.mo_output_dim)
+                self.X_init = X_all
+                self.model.set_XY(self.X_ext, self.Y_ext)
+            else:
+                self.model.set_XY(X_all, Y_all)
 
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
         if self.max_iters > 0:
@@ -95,10 +124,20 @@ class GPModel(BOModel):
                 self.model.optimize_restarts(num_restarts=self.optimize_restarts, optimizer=self.optimizer, max_iters = self.max_iters, verbose=self.verbose)
 
     def _predict(self, X, full_cov, include_likelihood):
+        """ Use the underlying GP model to make predictions
+        In  case of multioutput return in the shape nb_X x nb_output"""
         if X.ndim == 1:
             X = X[None,:]
-        m, v = self.model.predict(X, full_cov=full_cov, include_likelihood=include_likelihood)
+        if(self.mo_flag):
+            X_ext = multioutput.extend_X(X, self.mo_output_dim)
+        else:
+            X_ext = X
+        m, v = self.model.predict(X_ext, full_cov=full_cov, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
+        if self.mo_flag:
+            m = m.reshape(len(X), self.mo_output_dim)
+            v = v.reshape(len(X), self.mo_output_dim)
+
         return m, v
 
     def predict(self, X, with_noise=True):
@@ -124,49 +163,57 @@ class GPModel(BOModel):
         _, v = self._predict(X, True, with_noise)
         return v
 
-    def get_fmin(self):
-        """
-        Returns the location where the posterior mean is takes its minimal value.
-        """
-        return self.model.predict(self.model.X)[0].min()
+    def get_model_predict(self, include_likelihood = True):
+        """ Return the prediction for the already seen location"""
+        mu, v = self.model.predict(self.model.X, include_likelihood=include_likelihood)
+        _, list_muv= multioutput.contract_XYs(self.model.X, [mu, v], nb_index = self.mo_output_dim)
+        return list_muv[0], list_muv[1]
+
+    def get_model_data(self):
+        """ Return the data used by the model in the right format (e.g. if multioutput )"""
+        X, Y = multioutput.contract_XY(self.model.X, self.model.Y, nb_index = self.mo_output_dim)
+        return X, Y
 
 
-    def get_fmin_target(self, target = None):
-        """
-        Returns the location where the posterior mean takes the closest value to
-        a target. i.e. when |mean(f(x)) - alpha) is min
-        """
-        if(target is None):
-            return self.get_fmin()
-        else:
-            abs_dev = np.abs(self.model.predict(self.model.X)[0] - target).min()
-        return abs_dev
+    def get_fmin(self, target = None, mo_avg = False, fold = False):
+        """ Returns the minimal value of the posterior (potentially altered) at locations already visited. 
+        params:
+            target: shift the mean of the distrib
+            fold: use the folded distribution
+            mo_avg return the mean of the average over all the output
 
-    def get_fmin_folded_normal(self, target = None):
         """
-        Returns the location of the point where the mean of |f(x) - tgt| is min
-        Remarks: different from get_fmin_target 
-                 mean(|f(x) - target |) != |mean(f(x)) - target|
-        Use of the mean value of the folded distrib (distrib of |f(x) - target)
-        """
-        if(target is None):
-            return self.get_fmin()
-        else:
-            m,v = self.model.predict(self.model.X)
-            m_folded, _ = folded_normal(m, v)
-        return m_folded.min()
+        mu, v = self.get_model_predict()
+        if target is not None:
+            assert np.size(target) == mu.shape[1]
+            mu = mu - np.repeat(np.squeeze(target)[np.newaxis, :], len(mu), 0)
+        if fold:
+            mu  = folded_normal(mu, v)
+        elif target is not None: 
+            mu = np.abs(mu)
+        if mo_avg:
+            mu = np.average(mu, 1)[:, np.newaxis]
+        fmin = np.squeeze(np.min(mu, 0))
+        return fmin
     
-    def predict_withGradients(self, X):
+
+    def predict_withGradients(self, X,include_likelihood = False):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
         """
         if X.ndim==1: X = X[None,:]
-        m, v = self.model.predict(X)
+        if self.mo_flag:
+            X = multioutput.extend_X(X, self.mo_output_dim)
+        m, v = self.model.predict(X, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
         dmdx, dvdx = self.model.predictive_gradients(X)
         dmdx = dmdx[:,:,0]
         dsdx = dvdx / (2*np.sqrt(v))
-
+        if self.mo_flag:
+            m = m.reshape(len(X), self.mo_output_dim)
+            v = v.reshape(len(X), self.mo_output_dim)
+            dmdx = dmdx.reshape(len(X), self.mo_output_dim)
+            dsdx = dsdx.reshape(len(X), self.mo_output_dim)
         return m, np.sqrt(v), dmdx, dsdx
 
     def copy(self):
@@ -204,6 +251,7 @@ class GPModel(BOModel):
         """
         return self.model.posterior_covariance_between_points(x1, x2)
 
+
 class GPModelCustomLik(BOModel):
     """
     General class for handling a Gaussian Process with custom likelihood (i.e. 
@@ -233,7 +281,7 @@ class GPModelCustomLik(BOModel):
 
     def __init__(self, likelihood = 'Bernouilli',  inf_method = 'Laplace', gp_link=None, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', 
                  max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  
-                 verbose=True, ARD=False):
+                 verbose=True, ARD=False, mo=None):
         """
         Two new parameters:
             - inf_method: Inference method used to deqal with the non default likelihood
@@ -255,13 +303,29 @@ class GPModelCustomLik(BOModel):
         self.num_inducing = num_inducing
         self.model = None
         self.ARD = ARD
-        split_likelihood = likelihood.split("_")
-        self.likelihood = self._likelihood_map[split_likelihood[0]](gp_link = gp_link)
-        self.nb_obs = int(split_likelihood[1]) if(split_likelihood[0] == 'Binomial') else 1
-        self.inf_meth = self._inf_method_map[inf_method]()
+        
+    
+         # workaround to deal with multiple output
+        if mo is not None:
+            self.mo_flag = True
+            self.mo_output_dim = mo['output_dim'] 
+            self.mo_rank =  mo['rank']
+            self.mo_missing = mo.get('missing', False)
+            self.mo_kappa = mo.get('kappa')
+        else:
+            self.mo_flag = False
+            self.mo_output_dim = 1
     
 
-    
+        split_likelihood = likelihood.split("_")
+        self.likelihood = self._likelihood_map[split_likelihood[0]](gp_link = gp_link)
+        if(self.mo_flag):
+            self.likelihood_list = [self._likelihood_map[split_likelihood[0]](gp_link = gp_link) for o in range(self.mo_output_dim)]
+        
+        self.nb_obs = int(split_likelihood[1]) if(split_likelihood[0] == 'Binomial') else 1
+        self.inf_meth = self._inf_method_map[inf_method]()
+
+
     def _gen_YData(self, Y):
         """
         Gen Y metadata to match the shape of Y. Used for Binomial likelihood
@@ -286,21 +350,38 @@ class GPModelCustomLik(BOModel):
             kern = self.kernel
             self.kernel = None
 
+                
         # --- define model
         if not(self.exact_feval):
             noise_var = Y.var()*0.01 if self.noise_var is None else self.noise_var
             kern += GPy.kern.White(self.input_dim, noise_var)
-
+            #kern.name = 'kerX'
+            kern.white.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
+            
+            
         if not self.sparse:
-            Y_metadata= self._gen_YData(Y)
-            self.model = GPy.core.GP(X, Y, kernel=kern, inference_method=self.inf_meth, likelihood=self.likelihood, normalizer=False, Y_metadata = Y_metadata)
+            if self.mo_flag:
+                kern = kern ** GPy.kern.Coregionalize(1, output_dim=self.mo_output_dim, rank=self.mo_rank, kappa = self.mo_kappa, name='coregion')
+                self.X_ext, self.Y_ext = multioutput.extend_XY(X, Y, self.mo_output_dim)
+                self.X_init = X
+                Y_metadata= self._gen_YData(self.Y_ext)
+                Y_metadata.update({'output_index':self.X_ext[:, -1][:,np.newaxis]})
+                self.model = GPy.core.GP(self.X_ext, self.Y_ext, kern , inference_method=self.inf_meth, 
+                                         likelihood=self.likelihood, normalizer=False, 
+                                         name='CoregCustomLik', Y_metadata = Y_metadata)
+
+            else:
+                Y_metadata= self._gen_YData(Y)
+                self.model = GPy.core.GP(X, Y, kernel=kern, inference_method=self.inf_meth, likelihood=self.likelihood, 
+                                                                                normalizer=False, Y_metadata = Y_metadata)
         else:
             raise NotImplementedError()
 
         # --- restrict variance if exact evaluations of the objective
-        if not(self.exact_feval):
+        #if not(self.exact_feval):
             # --- We make sure we do not get ridiculously small residual noise variance
-            self.model.kern.white.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
+        #    self.model.kern.white.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
+
 
     def updateModel(self, X_all, Y_all, X_new, Y_new):
         """
@@ -310,8 +391,15 @@ class GPModelCustomLik(BOModel):
         if self.model is None:
             self._create_model(X_all, Y_all)
         else:
-            self.model.Y_metadata = self._gen_YData(Y_all)
-            self.model.set_XY(X_all, Y_all)
+            if self.mo_flag:
+                self.X_ext, self.Y_ext = multioutput.extend_XY(X_all, Y_all, self.mo_output_dim)
+                Y_metadata = self._gen_YData(self.Y_ext)
+                Y_metadata.update({'output_index':self.X_ext[:, -1][:,np.newaxis]})
+                self.model.Y_metadata = Y_metadata
+                self.model.set_XY(self.X_ext, self.Y_ext)
+            else:
+                self.model.Y_metadata = self._gen_YData(Y_all)
+                self.model.set_XY(X_all, Y_all)
 
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
         if self.max_iters > 0:
@@ -321,11 +409,19 @@ class GPModelCustomLik(BOModel):
             else:
                 self.model.optimize_restarts(num_restarts=self.optimize_restarts, optimizer=self.optimizer, max_iters = self.max_iters, verbose=self.verbose)
 
+
     def _predict(self, X, full_cov, include_likelihood):
         if X.ndim == 1:
             X = X[None,:]
-        m, v = self.model.predict(X, full_cov=full_cov, include_likelihood=include_likelihood)
+        if(self.mo_flag):
+            X_ext = multioutput.extend_X(X, self.mo_output_dim)
+        else:
+            X_ext = X
+        m, v = self.model.predict(X_ext, full_cov=full_cov, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
+        if self.mo_flag:
+            m = m.reshape(len(X), self.mo_output_dim)
+            v = v.reshape(len(X), self.mo_output_dim)
         return m, v
 
     def predict(self, X, with_noise=False):
@@ -357,49 +453,60 @@ class GPModelCustomLik(BOModel):
         _, v = self._predict(X, True, with_noise)
         return v
 
-    def get_fmin(self, include_likelihood = False):
-        """
-        Returns the location where the posterior mean takes its minimal value.
-        """
-        return self.model.predict(self.model.X, include_likelihood=include_likelihood)[0].min()
+    def get_model_predict(self, include_likelihood = False):
+        """ Return the prediction for the already seen location"""
+        mu, v = self.model.predict(self.model.X, include_likelihood=include_likelihood,
+                                   Y_metadata = self.model.Y_metadata)
+        _, (mu, v)= multioutput.contract_XYs(self.model.X, [mu, v], nb_index = self.mo_output_dim)
+        return mu, v
 
-    def get_fmin_target(self, include_likelihood = False, target = None):
-        """
-        Returns the location where the posterior mean takes the closest value to
-        a target.
-        """
-        if(target is None):
-            return self.get_fmin(include_likelihood)
-        else:
-            abs_dev = np.abs(self.model.predict(self.model.X, include_likelihood
-                             =include_likelihood)[0] - target).min()
-        return abs_dev
+    def get_model_data(self):
+        """ Return the data used by the model in the right format (e.g. if multioutput )"""
+        X, Y = multioutput.contract_XY(self.model.X, self.model.Y, nb_index = self.mo_output_dim)
+        return X, Y
 
-    def get_fmin_folded_normal(self, include_likelihood = False, target = None):
+
+
+    def get_fmin(self, include_likelihood = False, target = None, mo_avg = False, fold = False):
+        """ Returns the minimal value of the posterior (potentially altered) at locations already visited. 
+        params:
+            target: shift the mean of the distrib
+            fold: use the folded distribution
+            mo_avg return the mean of the average over all the output
+
         """
-        Returns the location of the point where the mean of |f(x) - tgt| is min
-        Remarks: different from get_fmin_target 
-                 mean(|f(x) - target |) != |mean(f(x)) - target|
-        Use of the mean value of the folded distrib (distrib of |f(x) - target)
-        """
-        if(target is None):
-            return self.get_fmin(include_likelihood)
-        else:
-            m,v = self.model.predict(self.model.X, include_likelihood=include_likelihood)
-            m_folded, _ = folded_normal(m, v)
-        return m_folded.min()
+
+        mu, v = self.get_model_predict(include_likelihood = include_likelihood)
+        if target is not None:
+            assert np.size(target) == mu.shape[1]
+            mu = mu - np.repeat(np.squeeze(target)[np.newaxis, :], len(mu), 0)
+        if fold:
+            mu, _  = folded_normal(mu, np.sqrt(v))
+        elif target is not None: 
+            mu = np.abs(mu)
+        if mo_avg:
+            mu = np.average(mu, 1)[:, np.newaxis]
+        fmin = np.squeeze(np.min(mu, 0))
+        return fmin
+    
     
     def predict_withGradients(self, X,include_likelihood = False):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
         """
         if X.ndim==1: X = X[None,:]
+        if self.mo_flag:
+            X = multioutput.extend_X(X, self.mo_output_dim)
         m, v = self.model.predict(X, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
         dmdx, dvdx = self.model.predictive_gradients(X)
         dmdx = dmdx[:,:,0]
         dsdx = dvdx / (2*np.sqrt(v))
-
+        if self.mo_flag:
+            m = m.reshape(len(X), self.mo_output_dim)
+            v = v.reshape(len(X), self.mo_output_dim)
+            dmdx = dmdx.reshape(len(X), self.mo_output_dim)
+            dsdx = dsdx.reshape(len(X), self.mo_output_dim)
         return m, np.sqrt(v), dmdx, dsdx
 
     def copy(self):
@@ -436,8 +543,9 @@ class GPModelCustomLik(BOModel):
         Given the current posterior, computes the covariance between two sets of points.
         """
         return self.model.posterior_covariance_between_points(x1, x2)
-    
-    
+
+
+
 class GPStacked(GPModel):
     """
     Stacked Models (cf.google Vizier paper)
@@ -578,9 +686,12 @@ class GPStacked(GPModel):
         if(target is None):
             return self.get_fmin(include_likelihood)
         else:
+            raise NotImplementedError("Is it well implemented")
             m,v = self.model.predict(self.model.X, include_likelihood=include_likelihood)
             m_folded, _ = folded_normal(m, v)
         return m_folded.min()
+
+
     def predict_withGradients(self, X):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
@@ -833,3 +944,4 @@ class GPModel_MCMC(BOModel):
         Returns a list with the names of the parameters of the model
         """
         return self.model.parameter_names()
+
