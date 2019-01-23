@@ -6,7 +6,7 @@ import itertools
 from copy import deepcopy
 
 from .variables import BanditVariable, DiscreteVariable, CategoricalVariable, ContinuousVariable, create_variable
-from ..errors import InvalidConfigError
+from ..errors import InvalidConfigError, InvalidVariableNameError
 from ...util.general import values_to_array, merge_values
 
 
