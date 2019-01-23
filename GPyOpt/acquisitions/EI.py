@@ -20,9 +20,9 @@ class AcquisitionEI(AcquisitionBase):
 
     analytical_gradient_prediction = True
 
-    def __init__(self, model, space, optimizer=None, cost_withGradients=None, jitter=0.01):
+    def __init__(self, model, space, optimizer=None, cost_withGradients=None, jitter=0.01, nb_output = 1):
         self.optimizer = optimizer
-        super(AcquisitionEI, self).__init__(model, space, optimizer, cost_withGradients=cost_withGradients)
+        super(AcquisitionEI, self).__init__(model, space, optimizer, cost_withGradients=cost_withGradients, nb_output=nb_output)
         self.jitter = jitter
 
     @staticmethod

@@ -3,6 +3,7 @@
 
 from .base import AcquisitionBase
 from ..util.general import folded_normal
+import numpy as np
 
 
 class AcquisitionLCB_target(AcquisitionBase):
@@ -22,9 +23,9 @@ class AcquisitionLCB_target(AcquisitionBase):
 
     analytical_gradient_prediction = False 
 
-    def __init__(self, model, space, optimizer=None, cost_withGradients=None, exploration_weight=2, target = None):
+    def __init__(self, model, space, optimizer=None, cost_withGradients=None, exploration_weight=2, target = None, nb_output=1):
         self.optimizer = optimizer
-        super(AcquisitionLCB_target, self).__init__(model, space, optimizer)
+        super(AcquisitionLCB_target, self).__init__(model, space, optimizer, nb_output=nb_output)
         self.exploration_weight = exploration_weight
         self.target = target
         if cost_withGradients is not None:
@@ -36,7 +37,7 @@ class AcquisitionLCB_target(AcquisitionBase):
         Use the mean and var of the folded distrib
         """
         m, s = self.model.predict(x)
-        m_folded, s_folded = folded_normal(m - self.target, s)
+        m_folded, s_folded = folded_normal(m - np.repeat(np.atleast_1d(self.target)[np.newaxis, :], len(m), 0), s)
         f_acqu = - m_folded + self.exploration_weight * s_folded
         return f_acqu
 

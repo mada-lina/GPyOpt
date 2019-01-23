@@ -3,6 +3,7 @@
 
 from .base import AcquisitionBase
 from ..util.general import get_quantiles
+import numpy as np
 
 class AcquisitionEI_target(AcquisitionBase):
     """
@@ -23,11 +24,11 @@ class AcquisitionEI_target(AcquisitionBase):
 
     """
 
-    analytical_gradient_prediction = True
+    analytical_gradient_prediction = False
 
-    def __init__(self, model, space, optimizer=None, cost_withGradients=None, jitter = 0.01, target = None):
+    def __init__(self, model, space, optimizer=None, cost_withGradients=None, jitter = 0.01, target = None, nb_output=1):
         self.optimizer = optimizer
-        super(AcquisitionEI_target, self).__init__(model, space, optimizer, cost_withGradients=cost_withGradients)
+        super(AcquisitionEI_target, self).__init__(model, space, optimizer, cost_withGradients=cost_withGradients, nb_output=nb_output)
         self.target = target
         self.jitter = jitter
 
@@ -41,7 +42,9 @@ class AcquisitionEI_target(AcquisitionBase):
         """
         t = self.target
         m, s = self.model.predict(x)
-        fmin = self.model.get_fmin_folded_normal(target = t)
+        fmin = self.model.get_fmin(target = t, fold = True)
+        fmin = np.repeat(np.atleast_1d(fmin)[np.newaxis, :], len(m), 0)
+        t = np.repeat(np.atleast_1d(t)[np.newaxis, :], len(m), 0)
         phi_a, Phi_a, a = get_quantiles(self.jitter, fmin, -(m-t), s)
         phi_b, Phi_b, b = get_quantiles(self.jitter, 0, -(m-t), s)
         phi_c, Phi_c, c = get_quantiles(self.jitter, fmin, (m-t), s)

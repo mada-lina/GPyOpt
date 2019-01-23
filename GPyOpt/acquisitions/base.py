@@ -2,6 +2,8 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 from ..core.task.cost import constant_cost_withGradients
+#from ..util import multioutput
+import numpy as np
 
 class AcquisitionBase(object):
     """
@@ -10,16 +12,20 @@ class AcquisitionBase(object):
     :param model: GPyOpt class of model
     :param space: GPyOpt class of domain
     :param optimizer: optimizer of the acquisition. Should be a GPyOpt optimizer
+    :param nb_output: nb of output of the GP (allows to deal with multioutput case) 
+
+    :notes: case of multioutput deals with a simple average
 
     """
 
     analytical_gradient_prediction = False
 
-    def __init__(self, model, space, optimizer, cost_withGradients=None):
+    def __init__(self, model, space, optimizer, cost_withGradients=None, nb_output=1):
         self.model = model
         self.space = space
         self.optimizer = optimizer
         self.analytical_gradient_acq = self.analytical_gradient_prediction and self.model.analytical_gradient_prediction # flag from the model to test if gradients are available
+        self.nb_output = nb_output
 
         if cost_withGradients is  None:
             self.cost_withGradients = constant_cost_withGradients
@@ -31,10 +37,14 @@ class AcquisitionBase(object):
         raise NotImplementedError()
 
     def acquisition_function(self,x):
-        """
-        Takes an acquisition and weights it so the domain and cost are taken into account.
-        """
-        f_acqu = self._compute_acq(x)
+        """ Takes an acquisition and weights it so the domain and cost are taken into account."""
+        if(self.nb_output > 1):
+            #X_ext = multioutput.extend_X(x) 
+            tmp = self._compute_acq(x)
+            #f_acqu = multioutput.gather_Y(tmp, self.nb_output, target_len = len(x))
+            f_acqu = np.average(tmp, 1)[:, np.newaxis]
+        else:
+            f_acqu = self._compute_acq(x)
         cost_x, _ = self.cost_withGradients(x)
         return -(f_acqu*self.space.indicator_constraints(x))/cost_x
 
@@ -66,3 +76,5 @@ class AcquisitionBase(object):
     def _compute_acq_withGradients(self, x):
 
         raise NotImplementedError('')
+
+

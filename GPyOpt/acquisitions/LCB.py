@@ -20,9 +20,9 @@ class AcquisitionLCB(AcquisitionBase):
 
     analytical_gradient_prediction = True
 
-    def __init__(self, model, space, optimizer=None, cost_withGradients=None, exploration_weight=2):
+    def __init__(self, model, space, optimizer=None, cost_withGradients=None, exploration_weight=2, nb_output=1):
         self.optimizer = optimizer
-        super(AcquisitionLCB, self).__init__(model, space, optimizer)
+        super(AcquisitionLCB, self).__init__(model, space, optimizer, nb_output=nb_output)
         self.exploration_weight = exploration_weight
 
         if cost_withGradients is not None:
