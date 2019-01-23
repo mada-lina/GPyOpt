@@ -4,9 +4,9 @@
 import time
 import numpy as np
 from ...util.general import spawn
-from ...util.general import get_d_moments
-import GPy
-import GPyOpt
+#from ...util.general import get_d_moments
+# import GPy
+# import GPyOpt
 
 class Objective(object):
     """
@@ -33,12 +33,13 @@ class SingleObjective(Objective):
     """
 
 
-    def __init__(self, func, num_cores = 1, objective_name = 'no_name', batch_type = 'synchronous', space = None):
+    def __init__(self, func, num_cores = 1, objective_name = 'no_name', batch_type = 'synchronous', space = None, output_dim = 1):
         self.func  = func
         self.n_procs = num_cores
         self.num_evaluations = 0
         self.space = space
         self.objective_name = objective_name
+        self.output_dim = output_dim
 
 
     def evaluate(self, x):
@@ -67,7 +68,7 @@ class SingleObjective(Objective):
         evaluation is also provided.
         """
         cost_evals = []
-        f_evals     = np.empty(shape=[0, 1])
+        f_evals     = np.empty(shape=[0, self.output_dim])
 
         for i in range(x.shape[0]):
             st_time    = time.time()
