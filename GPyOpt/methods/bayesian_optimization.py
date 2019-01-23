@@ -1,7 +1,6 @@
 # Copyright (c) 2016, the GPyOpt Authors
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
-
-
+import numpy as np
 from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionEntropySearch, AcquisitionLCB_target, AcquisitionEI_target
 from ..core.bo import BO
 from ..core.errors import InvalidConfigError
@@ -73,12 +72,37 @@ class BayesianOptimization(BO):
 
     .. Note::   The parameters bounds, kernel, numdata_initial_design, type_initial_design, model_optimize_interval, acquisition, acquisition_par
                 model_optimize_restarts, sparseGP, num_inducing and normalize can still be used but will be deprecated in the next version.
+    
+    .. Note: It has been customized to deal with multiple-output. It appears in different places: __init__() in arguments_manager, acquisition
     """
 
     def __init__(self, f, domain = None, constraints = None, cost_withGradients = None, model_type = 'GP', X = None, Y = None,
     	initial_design_numdata = 5, initial_design_type='random', acquisition_type ='EI', normalize_Y = True,
         exact_feval = False, acquisition_optimizer_type = 'lbfgs', model_update_interval=1, evaluator_type = 'sequential',
         batch_size = 1, num_cores = 1, verbosity=False, verbosity_model = False, maximize=False, de_duplication=False, **kwargs):
+
+        # if mo in kwargs:
+        #     self.mo_flag = True
+        #     self.mo = kwargs['mo']
+        #     self.mo_output_card = self.mo['output_card'] 
+        #     self.mo_full = self.mo.get('full', True)
+        #     self.mo_index = np.arange(self.mo_output_card)
+        # else:
+        #     self.mo_flag = False
+        #     self.mo_output_card = 1
+
+        # workaround to deal with multiple output
+        mo = kwargs.get('mo')
+        if mo is not None:
+            self.mo_flag = True
+            self.mo = kwargs['mo']
+            self.mo_output_dim = self.mo['output_dim']
+            self.mo_rank =  self.mo['rank']
+            self.mo_missing = self.mo.get('missing', False)
+            self.mo_kappa = self.mo.get('kappa')
+        else:
+            self.mo_flag = False
+            self.mo_output_dim = 1
 
         self.modular_optimization = False
         self.initial_iter = True
@@ -88,6 +112,7 @@ class BayesianOptimization(BO):
         self.de_duplication = de_duplication
         self.kwargs = kwargs
 
+
         # --- Handle the arguments passed via kwargs
         self.problem_config = ArgumentsManager(kwargs)
 
@@ -95,6 +120,7 @@ class BayesianOptimization(BO):
         self.constraints = constraints
         self.domain = domain
         self.space = Design_space(self.domain, self.constraints)
+
 
         # --- CHOOSE objective function
         self.maximize = maximize
@@ -106,7 +132,7 @@ class BayesianOptimization(BO):
         self.num_cores = num_cores
         if f is not None:
             self.f = self._sign(f)
-            self.objective = SingleObjective(self.f, self.batch_size,self.objective_name)
+            self.objective = SingleObjective(self.f, self.batch_size,self.objective_name, output_dim = self.mo_output_dim)
         else:
             self.f = None
             self.objective = None
@@ -149,7 +175,7 @@ class BayesianOptimization(BO):
         self.acquisition_type = acquisition_type
         self.acquisition_jitter = self.kwargs.get('acquisition_jitter', 0)
         self.acquisition_weight = self.kwargs.get('acquisition_weight',2)
-        self.acquisition_ftarget = self.kwargs.get('acquisition_ftarget')
+        self.acquisition_ftarget = np.array(self.kwargs.get('acquisition_ftarget'))
         if 'acquisition' in self.kwargs:
             if isinstance(kwargs['acquisition'], GPyOpt.acquisitions.AcquisitionBase):
                 self.acquisition = kwargs['acquisition']
