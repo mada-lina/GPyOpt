@@ -201,39 +201,54 @@ def merge_values(values1,values2):
     return np.atleast_2d(merged_array)
 
 
-def normalize(Y, normalization_type='stats'):
-    """Normalize the vector Y using statistics or its range.
+def normalize(Y, normalization_type='stats', target = None):
+    """Normalize the array Y using statistics or its range.
+    In case Y is effectively a 2d-array normalize by column
 
-    :param Y: Row or column vector that you want to normalize.
+    :param Y: array that you want to normalize.
     :param normalization_type: String specifying the kind of normalization
     to use. Options are 'stats' to use mean and standard deviation,
     or 'maxmin' to use the range of function values.
+    :param target
+    
     :return Y_normalized: The normalized vector.
     """
     Y = np.asarray(Y, dtype=float)
 
-    if np.max(Y.shape) != Y.size:
-        raise NotImplementedError('Only 1-dimensional arrays are supported.')
+    #if np.max(Y.shape) != Y.size:
+    #    raise NotImplementedError('Only 1-dimensional arrays are supported.')
 
     # Only normalize with non null sdev (divide by zero). For only one
     # data point both std and ptp return 0.
     if normalization_type == 'stats':
-        Y_norm = Y - Y.mean()
-        std = Y.std()
-        if std > 0:
-            Y_norm /= std
+        mean = Y.mean(0)
+        std = Y.std(0)
+        std[std<=0] = 1.
+        if target is not None:
+            target_norm = (target - mean) / std        
+        mean = np.repeat(mean[np.newaxis, :], len(Y),0)
+        std = np.repeat(std[np.newaxis, :], len(Y),0)
+        Y_norm = (Y - mean)/std
+
     elif normalization_type == 'maxmin':
-        Y_norm = Y - Y.min()
-        y_range = np.ptp(Y)
-        if y_range > 0:
-            Y_norm /= y_range
-            # A range of [-1, 1] is more natural for a zero-mean GP
-            Y_norm = 2 * (Y_norm - 0.5)
+        Y_min = Y.min(0)
+        Y_range = np.ptp(Y, 0)
+        if target is not None:
+            target_norm = target - Y_min
+            target_norm[Y_range > 0] = 2 * (target_norm[Y_range > 0] / Y_range[Y_range > 0] - 0.5)
+        Y_min = np.repeat(Y_min[np.newaxis, :], len(Y), 0)
+        Y_range= np.repeat(Y_range[np.newaxis, :], len(Y), 0)         
+        Y_norm = Y - Y_min
+        Y_norm[Y_range > 0] = 2 * (Y_norm[Y_range > 0] / Y_range[Y_range > 0] - 0.5)
+
     else:
         raise ValueError('Unknown normalization type: {}'.format(normalization_type))
 
-    return Y_norm
-
+    if target is None:
+        return Y_norm
+    else:
+        assert len(target) == Y.shape[1], "target has shape {} while Y is {}".format(np.shape(target), np.shape(Y))
+        return Y_norm, target_norm
 
 def folded_normal(m, s):
     """ From a given RV X ~ N(m, s^2) get the mean and standard deviation 
@@ -243,6 +258,6 @@ def folded_normal(m, s):
     mbys = m/s
     dev = 0.5 * mbys * mbys 
     m_folded = s * np.sqrt(2 / np.pi) * np.exp(- dev) + m * (1 - 2 * stats.norm.cdf(-mbys))
-    s_folded = m * m + s * s - m_folded * m_folded    
-    return m_folded, s_folded
+    v_folded = m * m + s * s - m_folded * m_folded    
+    return m_folded, np.sqrt(v_folded)
     
