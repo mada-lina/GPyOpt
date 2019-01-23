@@ -14,6 +14,7 @@ class ArgumentsManager(object):
         self.kwargs = kwargs
 
 
+
     def evaluator_creator(self, evaluator_type, acquisition, batch_size, model_type, model, space, acquisition_optimizer):
         """
         Acquisition chooser from the available options. Guide the optimization through sequential or parallel evalutions of the objective.
@@ -52,16 +53,21 @@ class ArgumentsManager(object):
         acquisition_jitter = kwargs.get('acquisition_jitter',0.01)
         acquisition_weight = kwargs.get('acquisition_weight',2)
         acquisition_ftarget = kwargs.get('acquisition_ftarget')
+        mo = self.kwargs.get('mo')
+        if mo is None:
+            nb_output = 1
+        else:
+            nb_output = mo.get('output_dim')
 
         # --- Choose the acquisition
         if acquisition_type is  None or acquisition_type =='EI':
-            return AcquisitionEI(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter)
+            return AcquisitionEI(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter, nb_output = nb_output)
 
         elif acquisition_type =='EI_MCMC':
             return AcquisitionEI_MCMC(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter)
 
         elif acquisition_type =='EI_target':
-            return AcquisitionEI_target(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter, acquisition_ftarget)
+            return AcquisitionEI_target(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter, acquisition_ftarget, nb_output = nb_output)
 
         elif acquisition_type =='MPI':
             return AcquisitionMPI(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter)
@@ -70,10 +76,10 @@ class ArgumentsManager(object):
             return AcquisitionMPI_MCMC(model, space, acquisition_optimizer, cost_withGradients, acquisition_jitter)
 
         elif acquisition_type =='LCB':
-            return AcquisitionLCB(model, space, acquisition_optimizer, None, acquisition_weight)
+            return AcquisitionLCB(model, space, acquisition_optimizer, None, acquisition_weight, nb_output = nb_output)
         
         elif acquisition_type =='LCB_target':
-            return AcquisitionLCB_target(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget)
+            return AcquisitionLCB_target(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget, nb_output = nb_output)
 
         elif acquisition_type =='LCB_MCMC':
             return AcquisitionLCB_MCMC(model, space, acquisition_optimizer, None, acquisition_weight)
@@ -99,13 +105,18 @@ class ArgumentsManager(object):
         optimize_restarts = self.kwargs.get('optimize_restarts',5)
         sparse = True if model_type == 'sparseGP' else False
         optimize_restarts = self.kwargs.get('optimize_restarts',5)
-        num_inducing = self.kwargs.get('num_inducing',10)        
+        num_inducing = self.kwargs.get('num_inducing',10)
+
+        # new args for multiple output a dictionary is expected with the fields
+        # 'missing_data'
+        # 'rank'
+        mo = self.kwargs.get('mo')
         
         # --------
         # --- Initialize GP model with MLE on the parameters
         # --------
         if model_type == 'GP' or model_type == 'sparseGP':
-            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD)
+            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD, mo = mo)
 
         # --------
         # --- Initialize GP model with MCMC on the parameters
@@ -154,4 +165,4 @@ class ArgumentsManager(object):
             inf_method = self.kwargs.get('inf_method', 'EP')
             gp_link = self.kwargs.get('gp_link')
             return GPModelCustomLik(likelihood, inf_method, gp_link, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, False,
-                10, verbosity_model, ARD)
+                10, verbosity_model, ARD, mo = mo)
