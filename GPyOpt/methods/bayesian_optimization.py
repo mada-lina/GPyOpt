@@ -99,7 +99,8 @@ class BayesianOptimization(BO):
             self.mo_output_dim = self.mo['output_dim']
             self.mo_rank =  self.mo['rank']
             self.mo_missing = self.mo.get('missing', False)
-            self.mo_kappa = self.mo.get('kappa')
+            #self.mo_kappa = mo.get('kappa')
+            #self.mo_kappa_fix = self.mo.get('kappa')
         else:
             self.mo_flag = False
             self.mo_output_dim = 1

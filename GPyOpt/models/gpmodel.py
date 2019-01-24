@@ -53,6 +53,7 @@ class GPModel(BOModel):
             self.mo_rank =  mo['rank']
             self.mo_missing = mo.get('missing', False)
             self.mo_kappa = mo.get('kappa')
+            self.mo_kappa_fix = mo.get('kappa_fix')
         else:
             self.mo_flag = False
             self.mo_output_dim = 1
@@ -81,7 +82,10 @@ class GPModel(BOModel):
             if self.mo_flag:
                 self.X_ext, self.Y_ext = multioutput.extend_XY(X, Y, self.mo_output_dim)
                 self.X_init = X
-                kern = kern ** GPy.kern.Coregionalize(1, output_dim=self.mo_output_dim, rank=self.mo_rank, kappa = self.mo_kappa)
+                coreg = GPy.kern.Coregionalize(1, output_dim=self.mo_output_dim, rank=self.mo_rank, kappa = self.mo_kappa, name='coregion')
+                if self.mo_kappa_fix:
+                    coreg.kappa.fix()
+                kern = kern ** coreg 
                 self.model = GPy.models.GPRegression(self.X_ext, self.Y_ext, kern, Y_metadata={'output_index':self.X_ext[:, -1][:,np.newaxis]})
             else:
                 self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var)
@@ -312,6 +316,7 @@ class GPModelCustomLik(BOModel):
             self.mo_rank =  mo['rank']
             self.mo_missing = mo.get('missing', False)
             self.mo_kappa = mo.get('kappa')
+            self.mo_kappa_fix = mo.get('kappa_fix')
         else:
             self.mo_flag = False
             self.mo_output_dim = 1
@@ -361,7 +366,10 @@ class GPModelCustomLik(BOModel):
             
         if not self.sparse:
             if self.mo_flag:
-                kern = kern ** GPy.kern.Coregionalize(1, output_dim=self.mo_output_dim, rank=self.mo_rank, kappa = self.mo_kappa, name='coregion')
+                coreg = GPy.kern.Coregionalize(1, output_dim=self.mo_output_dim, rank=self.mo_rank, kappa = self.mo_kappa, name='coregion')
+                if self.mo_kappa_fix:
+                    coreg.kappa.fix()
+                kern = kern ** coreg 
                 self.X_ext, self.Y_ext = multioutput.extend_XY(X, Y, self.mo_output_dim)
                 self.X_init = X
                 Y_metadata= self._gen_YData(self.Y_ext)
