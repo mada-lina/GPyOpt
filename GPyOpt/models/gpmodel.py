@@ -53,7 +53,7 @@ class GPModel(BOModel):
             self.mo_rank =  mo['rank']
             self.mo_missing = mo.get('missing', False)
             self.mo_kappa = mo.get('kappa')
-            self.mo_kappa_fix = mo.get('kappa_fix')
+            self.mo_kappa_fix = mo.get('kappa_fix', False)
         else:
             self.mo_flag = False
             self.mo_output_dim = 1
@@ -316,7 +316,7 @@ class GPModelCustomLik(BOModel):
             self.mo_rank =  mo['rank']
             self.mo_missing = mo.get('missing', False)
             self.mo_kappa = mo.get('kappa')
-            self.mo_kappa_fix = mo.get('kappa_fix')
+            self.mo_kappa_fix = mo.get('kappa_fix', False)
         else:
             self.mo_flag = False
             self.mo_output_dim = 1
