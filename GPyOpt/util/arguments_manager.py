@@ -105,7 +105,9 @@ class ArgumentsManager(object):
         optimize_restarts = self.kwargs.get('optimize_restarts',5)
         sparse = True if model_type == 'sparseGP' else False
         optimize_restarts = self.kwargs.get('optimize_restarts',5)
-        num_inducing = self.kwargs.get('num_inducing',10)
+        num_inducing = self.kwargs.get('num_inducing',100)
+        max_iters = self.kwargs.get('max_iters',1000)
+        optimize_restarts= self.kwargs.get('optimize_restarts',5)
 
         # new args for multiple output a dictionary is expected with the fields
         # 'missing_data'
