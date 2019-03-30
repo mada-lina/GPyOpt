@@ -15,7 +15,7 @@ class AcquisitionBase(object):
     :param nb_output: nb of output of the GP (allows to deal with multioutput case) 
 
     :notes: case of multioutput deals with a simple average
-
+    :notes: goal is to minimize this acquisition function
     """
 
     analytical_gradient_prediction = False
