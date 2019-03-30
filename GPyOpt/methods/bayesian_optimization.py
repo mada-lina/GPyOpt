@@ -49,6 +49,7 @@ class BayesianOptimization(BO):
         - 'MPI', maximum probability of improvement.
         - 'MPI_MCMC', maximum probability of improvement (requires GP_MCMC model).
         - 'LCB', GP-Lower confidence bound.
+        - 'LCB_oneq', GP-Lower confidence bound 
         - 'LCB_MCMC', integrated GP-Lower confidence bound (requires GP_MCMC model).
         - 'LCB_target', GP-Lower confidence bound for folded distribution
     :param normalize_Y: whether to normalize the outputs before performing any optimization (default, True).

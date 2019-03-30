@@ -12,6 +12,7 @@ from .LP import AcquisitionLP
 from .ES import AcquisitionEntropySearch
 from .EI_target import AcquisitionEI_target
 from .LCB_target import AcquisitionLCB_target
+from .LCB_oneq import AcquisitionLCB_oneq
 
 
 def select_acquisition(name):
@@ -34,6 +35,8 @@ def select_acquisition(name):
         return AcquisitionMPI
     elif name == 'MPI_MCMC':
         return AcquisitionMPI_MCMC
+    elif name == "LCB_oneq":
+        return AcquisitionLCB_oneq
     elif name == 'LP':
         return AcquisitionLP
     elif name == 'ES':

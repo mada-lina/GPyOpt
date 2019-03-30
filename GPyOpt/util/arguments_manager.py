@@ -3,7 +3,7 @@ from ..models.rfmodel import RFModel
 from ..models.warpedgpmodel import WarpedGPModel
 from ..models.input_warped_gpmodel import InputWarpedGPModel
 from ..core.evaluators import Sequential, RandomBatch, LocalPenalization, ThompsonBatch
-from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionEI_target, AcquisitionLCB_target
+from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionLCB_oneq, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionEI_target, AcquisitionLCB_target
 from ..core.errors import InvalidConfigError
 from ..models.base import BOModel
 class ArgumentsManager(object):
@@ -80,6 +80,9 @@ class ArgumentsManager(object):
         
         elif acquisition_type =='LCB_target':
             return AcquisitionLCB_target(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget, nb_output = nb_output)
+
+        elif acquisition_type =='LCB_oneq':
+            return AcquisitionLCB_oneq(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget, nb_output = nb_output, oneq_type = 'full')
 
         elif acquisition_type =='LCB_MCMC':
             return AcquisitionLCB_MCMC(model, space, acquisition_optimizer, None, acquisition_weight)
