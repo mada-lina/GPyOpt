@@ -52,3 +52,10 @@ class AcquisitionLCB_target(AcquisitionBase):
         df_acqu = -dmdx + self.exploration_weight * dsdx
         return f_acqu, df_acqu
 
+    def _compute_acq_novar(self, x):
+        """
+        Computes the acquisition function without the uncertainty part i.e. the expected value of the fom
+        """
+        m, s = self.model.predict(x)
+        m_folded, _ = folded_normal(m - np.repeat(np.atleast_1d(self.target)[np.newaxis, :], len(m), 0), s)
+        return np.average(np.atleast_1d(m_folded), 1)[:, np.newaxis]

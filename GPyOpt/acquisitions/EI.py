@@ -49,3 +49,10 @@ class AcquisitionEI(AcquisitionBase):
         f_acqu = s * (u * Phi + phi)
         df_acqu = dsdx * phi - Phi * dmdx
         return f_acqu, df_acqu
+
+    def _compute_acq_novar(self, x):
+        """
+        Computes the acquisition function without the uncertainty part i.e. the expected value of the fom
+        """
+        m, _ = self.model.predict(x)
+        return m

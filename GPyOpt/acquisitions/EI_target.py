@@ -2,7 +2,7 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 from .base import AcquisitionBase
-from ..util.general import get_quantiles
+from ..util.general import get_quantiles, folded_normal
 import numpy as np
 
 class AcquisitionEI_target(AcquisitionBase):
@@ -68,3 +68,11 @@ class AcquisitionEI_target(AcquisitionBase):
         f_acqu = s * (a * (Phi_a - Phi_b) + c * (Phi_b + Phi_c - 1) + phi_a + phi_c - 2 * phi_b)
         df_acqu = dmdx * (Phi_a - 2 * Phi_b - Phi_c + 1) + dsdx * (phi_a + phi_c - 2 * phi_b)
         return f_acqu, df_acqu
+
+    def _compute_acq_novar(self, x):
+        """
+        Computes the acquisition function without the uncertainty part i.e. the expected value of the fom
+        """
+        m, s = self.model.predict(x)
+        m_folded, _ = folded_normal(m - np.repeat(np.atleast_1d(self.target)[np.newaxis, :], len(m), 0), s)
+        return np.average(np.atleast_1d(m_folded), 1)[:, np.newaxis]
