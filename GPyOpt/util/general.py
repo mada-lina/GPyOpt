@@ -4,6 +4,7 @@
 import numpy as np
 from scipy.special import erfc
 import scipy.stats as stats
+import scipy.special as special
 import time
 from ..core.errors import InvalidConfigError
 
@@ -261,3 +262,36 @@ def folded_normal(m, s):
     v_folded = m * m + s * s - m_folded * m_folded    
     return m_folded, np.sqrt(v_folded)
     
+
+def change_of_var_Phi(m, s):
+    """ from arrays of mean and std of NORMAL variables X, produce the mean and std of
+    Phi(X) where Phi is the normal cumulative distribution
+    E[Phi(X)] = Phi(m/sqrt(1 + s^2))
+    Var[Phi(X)] = E - E^2 - T (m/sqrt(1 + s^2), m/sqrt(1 + 2*s^2))
+    """
+    a = m / np.sqrt(1 + np.square(s))
+    h = 1 / np.sqrt(1 + 2 * np.square(s))
+    m_cdf = stats.norm.cdf(a)
+    s_cdf = np.sqrt(m_cdf - np.square(m_cdf) - 2 * special.owens_t(a, h))
+    return m_cdf, s_cdf
+
+def product_indep(m_X, s_X, m_Y, s_Y):
+    """ from arrays of mean and std of random variables X, produce the mean and std of
+    XY
+    E[XY] = E[X] * E[Y]
+    Var[XY] = Var[X]Var[Y] + Var[Y] E[X]^2 + Var[X] * E[Y]^2
+    """
+    v_X, v_Y = np.square(s_X), np.square(s_Y)
+    m_prod = m_X * m_Y
+    s_prod = np.sqrt(v_X * v_Y + v_X * np.square(m_Y) + v_Y * np.square(m_X)) 
+    return m_prod, s_prod
+
+def sum_indep(m_X, s_X, m_Y, s_Y):
+    """ from arrays of mean and std of random variables X, produce the mean and std of
+    XY
+    E[XY] = E[X] * E[Y]
+    Var[XY] = 
+    """
+    m_sum = m_X + m_Y
+    s_sum = np.sqrt(np.square(s_X) + np.square(s_Y))
+    return m_sum, s_sum
