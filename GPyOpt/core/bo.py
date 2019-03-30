@@ -230,26 +230,26 @@ class BO(object):
         """ return location of the best point both x, y seen and expected (i.e. based on  the 
         expected values at locations already seen)"""
         self._update_model()
-        tgt = self.acquisition.target if hasattr(self.acquisition, 'target') else None
+        #tgt = self.acquisition.target if hasattr(self.acquisition, 'target') else None
+        #mu, _ = self.model.get_model_predict() # prediction
         
-        mu, _ = self.model.get_model_predict() # prediction
         x, y = self.model.get_model_data() # data seen by the GPy model (i.e. may be normalized)
+        
+        f_exp = self.acquisition._compute_acq_novar(x)
+        best_exp = np.argmin(f_exp)
+        x_exp = x[best_exp]
+        y_exp = f_exp[best_exp]        
 
-        if tgt is not None:
-            assert np.size(tgt) == mu.shape[1]
+        tgt = self.acquisition.target if hasattr(self.acquisition, 'target') else None
+        if tgt is None:
+            f_seen = np.sum(y, 1)[:, np.newaxis]
+        else:            
             assert np.size(tgt) == y.shape[1]
-            mu_tgt = np.average(np.abs(mu - np.repeat(np.squeeze(tgt)[np.newaxis, :], len(mu), 0)), 1)
-            y_tgt = np.average(np.abs(y - np.repeat(np.squeeze(tgt)[np.newaxis, :], len(y), 0)), 1)
-        else:
-            mu_tgt = mu
-            y_tgt = y
+            f_seen = np.average(np.abs(y - np.repeat(np.squeeze(tgt)[np.newaxis, :], len(y), 0)), 1)
 
-        best_seen =  np.argmin(y_tgt)
-        best_exp = np.argmin(mu_tgt)
+        best_seen =  np.argmin(f_seen)
         x_seen = x[best_seen]
         y_seen = y[best_seen]
-        x_exp = x[best_exp]
-        y_exp = mu[best_exp]
 
         return (x_seen, y_seen), (x_exp, y_exp)
 
