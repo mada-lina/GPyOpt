@@ -192,7 +192,7 @@ class GPModel(BOModel):
             assert np.size(target) == mu.shape[1]
             mu = mu - np.repeat(np.squeeze(target)[np.newaxis, :], len(mu), 0)
         if fold:
-            mu  = folded_normal(mu, v)
+            mu, _  = folded_normal(mu, v)
         elif target is not None: 
             mu = np.abs(mu)
         if mo_avg:
