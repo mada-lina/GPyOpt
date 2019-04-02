@@ -18,14 +18,15 @@ class AcquisitionLCB_oneq(AcquisitionBase):
 
     analytical_gradient_prediction = False 
 
-    def __init__(self, model, space, optimizer=None, cost_withGradients=None, exploration_weight=2, target = None, nb_output=1, oneq_type = 'full'):
+    def __init__(self, model, space, optimizer=None, cost_withGradients=None, exploration_weight=2, target = None, nb_output=1, acq_nbq = 1):
         self.optimizer = optimizer
         super(AcquisitionLCB_oneq, self).__init__(model, space, optimizer, nb_output=nb_output)
         self.exploration_weight = exploration_weight
         self.target = np.array(target) 
         self.tgt_p = np.array(target)
         self.tgt_sigmas = 2 * self.tgt_p - 1
-        self.oneq_type = oneq_type
+        self.acq_nbq = acq_nbq
+        self.coeff_dim = 1/(2**acq_nbq) 
         if cost_withGradients is not None:
             print('The set cost function is ignored! LCB acquisition does not make sense with cost.')  
 
@@ -38,13 +39,8 @@ class AcquisitionLCB_oneq(AcquisitionBase):
         m, s = self.model.predict(x) #mean and std of the 
         m_p, s_p = change_of_var_Phi(m, s)
         m_sigmas, s_sigmas = 2 * m_p - 1, 2 * s_p
-
-        if(self.oneq_type == 'full'):
-            m_acq = 1/2 * (1 + np.sum(m_sigmas * self.tgt_sigmas, 1))
-            s_acq = 1/2 * np.sqrt(np.sum(np.square(s_sigmas) * np.square(self.tgt_sigmas), 1))
-        else:
-            raise NotImplementedError()
-
+        m_acq = self.coeff_dim * (1 + np.sum(m_sigmas * self.tgt_sigmas, 1))
+        s_acq = self.coeff_dim * np.sqrt(np.sum(np.square(s_sigmas * self.tgt_sigmas), 1))
         f_acqu = m_acq + self.exploration_weight * s_acq
         return f_acqu[:, np.newaxis]
 
@@ -62,8 +58,5 @@ class AcquisitionLCB_oneq(AcquisitionBase):
         m, s = self.model.predict(x) #mean and std of the 
         m_p, s_p = change_of_var_Phi(m, s)
         m_sigmas = 2 * m_p - 1
-        if(self.oneq_type == 'full'):
-            m_acq = 1/2 * (1 + np.sum(m_sigmas * self.tgt_sigmas, 1))
-        else:
-            raise NotImplementedError()
+        m_acq = self.coeff_dim * (1 + np.sum(m_sigmas * self.tgt_sigmas, 1))
         return -m_acq[:, np.newaxis]

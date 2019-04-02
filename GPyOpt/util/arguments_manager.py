@@ -53,6 +53,7 @@ class ArgumentsManager(object):
         acquisition_jitter = kwargs.get('acquisition_jitter',0.01)
         acquisition_weight = kwargs.get('acquisition_weight',2)
         acquisition_ftarget = kwargs.get('acquisition_ftarget')
+        acq_nbq = self.kwargs.get('acq_nbq', 1)
         mo = self.kwargs.get('mo')
         if mo is None:
             nb_output = 1
@@ -82,7 +83,7 @@ class ArgumentsManager(object):
             return AcquisitionLCB_target(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget, nb_output = nb_output)
 
         elif acquisition_type =='LCB_oneq':
-            return AcquisitionLCB_oneq(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget, nb_output = nb_output, oneq_type = 'full')
+            return AcquisitionLCB_oneq(model, space, acquisition_optimizer, None, acquisition_weight, acquisition_ftarget, nb_output = nb_output, acq_nbq = acq_nbq)
 
         elif acquisition_type =='LCB_MCMC':
             return AcquisitionLCB_MCMC(model, space, acquisition_optimizer, None, acquisition_weight)
