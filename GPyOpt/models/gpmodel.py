@@ -104,7 +104,7 @@ class GPModel(BOModel):
             # --- We make sure we do not get ridiculously small residual noise variance
             self.model.Gaussian_noise.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
 
-    def updateModel(self, X_all, Y_all, X_new, Y_new):
+    def updateModel(self, X_all, Y_all, X_new, Y_new, update_hp = True):
         """
         Updates the model with new observations.
         """
@@ -120,7 +120,7 @@ class GPModel(BOModel):
                 self.model.set_XY(X_all, Y_all)
 
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
-        if self.max_iters > 0:
+        if self.max_iters > 0 and update_hp:
             # --- update the model maximizing the marginal likelihood.
             if self.optimize_restarts==1:
                 self.model.optimize(optimizer=self.optimizer, max_iters = self.max_iters, messages=False, ipython_notebook=False)
@@ -132,10 +132,7 @@ class GPModel(BOModel):
         In  case of multioutput return in the shape nb_X x nb_output"""
         if X.ndim == 1:
             X = X[None,:]
-        if(self.mo_flag):
-            X_ext = multioutput.extend_X(X, self.mo_output_dim)
-        else:
-            X_ext = X
+        X_ext = multioutput.extend_X(X, self.mo_output_dim) if(self.mo_flag) else X
         m, v = self.model.predict(X_ext, full_cov=full_cov, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
         if self.mo_flag:
@@ -143,6 +140,7 @@ class GPModel(BOModel):
             v = v.reshape(len(X), self.mo_output_dim)
 
         return m, v
+
 
     def predict(self, X, with_noise=True):
         """
@@ -206,19 +204,21 @@ class GPModel(BOModel):
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
         """
         if X.ndim==1: X = X[None,:]
-        if self.mo_flag:
-            X = multioutput.extend_X(X, self.mo_output_dim)
-        m, v = self.model.predict(X, include_likelihood=include_likelihood)
+        X_ext = multioutput.extend_X(X, self.mo_output_dim) if self.mo_flag else X
+        m, v = self.model.predict(X_ext, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
-        dmdx, dvdx = self.model.predictive_gradients(X)
+        dmdx, dvdx = self.model.predictive_gradients(X_ext)
         dmdx = dmdx[:,:,0]
         dsdx = dvdx / (2*np.sqrt(v))
         if self.mo_flag:
-            m = m.reshape(len(X), self.mo_output_dim)
-            v = v.reshape(len(X), self.mo_output_dim)
-            dmdx = dmdx.reshape(len(X), self.mo_output_dim)
-            dsdx = dsdx.reshape(len(X), self.mo_output_dim)
+            nb_params = X.shape[1]
+            nb_X = X.shape[0]
+            m = m.reshape(nb_X, self.mo_output_dim) # nbx, nbmodels
+            v = v.reshape(nb_X, self.mo_output_dim) # nbx, nbmodels
+            dmdx = dmdx[:,:-1].reshape(nb_X, self.mo_output_dim, nb_params) # nbx, nbmodels, nb_params
+            dsdx = dsdx[:,:-1].reshape(nb_X, self.mo_output_dim, nb_params) # nbx, nbmodels, nb_params
         return m, np.sqrt(v), dmdx, dsdx
+
 
     def copy(self):
         """
@@ -391,7 +391,7 @@ class GPModelCustomLik(BOModel):
         #    self.model.kern.white.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
 
 
-    def updateModel(self, X_all, Y_all, X_new, Y_new):
+    def updateModel(self, X_all, Y_all, X_new, Y_new, update_hp=True):
         """
         Updates the model with new observations.
         """
@@ -410,7 +410,7 @@ class GPModelCustomLik(BOModel):
                 self.model.set_XY(X_all, Y_all)
 
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
-        if self.max_iters > 0:
+        if self.max_iters > 0 and update_hp:
             # --- update the model maximizing the marginal likelihood.
             if self.optimize_restarts==1:
                 self.model.optimize(optimizer=self.optimizer, max_iters = self.max_iters, messages=False, ipython_notebook=False)
@@ -503,19 +503,21 @@ class GPModelCustomLik(BOModel):
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
         """
         if X.ndim==1: X = X[None,:]
-        if self.mo_flag:
-            X = multioutput.extend_X(X, self.mo_output_dim)
-        m, v = self.model.predict(X, include_likelihood=include_likelihood)
+        X_ext = multioutput.extend_X(X, self.mo_output_dim) if self.mo_flag else X
+        m, v = self.model.predict(X_ext, full_cov=False, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
-        dmdx, dvdx = self.model.predictive_gradients(X)
+        dmdx, dvdx = self.model.predictive_gradients(X_ext)
         dmdx = dmdx[:,:,0]
         dsdx = dvdx / (2*np.sqrt(v))
         if self.mo_flag:
-            m = m.reshape(len(X), self.mo_output_dim)
-            v = v.reshape(len(X), self.mo_output_dim)
-            dmdx = dmdx.reshape(len(X), self.mo_output_dim)
-            dsdx = dsdx.reshape(len(X), self.mo_output_dim)
+            nb_params = X.shape[1]
+            nb_X = X.shape[0]
+            m = m.reshape(nb_X, self.mo_output_dim) # nbx, nbmodels
+            v = v.reshape(nb_X, self.mo_output_dim) # nbx, nbmodels
+            dmdx = dmdx[:,:-1].reshape(nb_X, self.mo_output_dim, nb_params) # nbx, nbmodels, nb_params
+            dsdx = dsdx[:,:-1].reshape(nb_X, self.mo_output_dim, nb_params) # nbx, nbmodels, nb_params
         return m, np.sqrt(v), dmdx, dsdx
+
 
     def copy(self):
         """
@@ -606,7 +608,7 @@ class GPStacked(GPModel):
             # --- We make sure we do not get ridiculously small residual noise variance
             self.model.Gaussian_noise.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
 
-    def updateModel(self, X_all, Y_all, X_new, Y_new):
+    def updateModel(self, X_all, Y_all, X_new, Y_new, update_hp=True):
         """
         Updates the model with new observations.
         """
@@ -617,7 +619,7 @@ class GPStacked(GPModel):
             self.model.set_XY(X_all, Y_all_res)
 
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
-        if self.max_iters > 0:
+        if self.max_iters > 0 and update_hp:
             # --- update the model maximizing the marginal likelihood.
             if self.optimize_restarts==1:
                 self.model.optimize(optimizer=self.optimizer, max_iters = self.max_iters, messages=False, ipython_notebook=False)
