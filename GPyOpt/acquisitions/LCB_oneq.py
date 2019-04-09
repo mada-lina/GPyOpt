@@ -2,7 +2,8 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 from .base import AcquisitionBase
-from ..util.general import change_of_var_Phi
+from ..util.general import change_of_var_Phi,change_of_var_Phi_withGradients
+from ..models import gpmodel
 import numpy as np
 
 
@@ -36,8 +37,11 @@ class AcquisitionLCB_oneq(AcquisitionBase):
         Computes the GP-Lower Confidence Bound 
         Use the mean and var of the folded distrib
         """
-        m, s = self.model.predict(x) #mean and std of the 
-        m_p, s_p = change_of_var_Phi(m, s)
+        m, s = self.model.predict(x) #mean and std of the
+        if type(self.model) == gpmodel.GPModelCustomLik:
+            m_p, s_p = change_of_var_Phi(m, s)
+        else:
+            m_p, s_p = m, s
         m_sigmas, s_sigmas = 2 * m_p - 1, 2 * s_p
         m_acq = self.coeff_dim * (1 + np.sum(m_sigmas * self.tgt_sigmas, 1))
         s_acq = self.coeff_dim * np.sqrt(np.sum(np.square(s_sigmas * self.tgt_sigmas), 1))
@@ -49,7 +53,20 @@ class AcquisitionLCB_oneq(AcquisitionBase):
         Computes the GP-Lower Confidence Bound and its derivative
         Use the mean and var of the folded distrib
         """
-        raise NotImplementedError()
+        m, s, dmdx, dsdx = self.model.predict_withGradients(x) 
+        if type(self.model) == gpmodel.GPModelCustomLik:
+            mp, vp, dmpdx, dvpdx = change_of_var_Phi_withGradients(m, s, dmdx, dsdx)
+        else:
+            mp, vp, dmpdx, dvpdx = m, np.square(s), dmdx, 2 * s * dsdx
+        msigma, vsigma, dmsigmadx, dvsigmadx = (2*mp -1), 4*vp, 2*dmpdx, 4*dvpdx
+        macq = self.coeff_dim * (1 + np.dot(msigma, self.tgt_sigmas))
+        sacq = self.coeff_dim * np.sqrt(np.dot(vsigma, np.square(self.tgt_sigmas)))
+        dmacqdx = self.coeff_dim * np.einsum('j,ijk', self.tgt_sigmas, dmsigmadx)
+        dsacqdx = self.coeff_dim * np.einsum('j,ijk', np.square(self.tgt_sigmas), dvsigmadx)/(2*sacq)
+
+        f_acqu = -macq + self.exploration_weight * sacq       
+        df_acqu = -dmacqdx + self.exploration_weight * dsacqdx
+        return f_acqu[:, np.newaxis], df_acqu
 
     def _compute_acq_novar(self, x):
         """

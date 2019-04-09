@@ -53,7 +53,15 @@ class AcquisitionBase(object):
         """
         Takes an acquisition and it gradient and weights it so the domain and cost are taken into account.
         """
-        f_acqu,df_acqu = self._compute_acq_withGradients(x)
+        if(self.nb_output > 1):
+            #X_ext = multioutput.extend_X(x) 
+            tmp, dtmp = self._compute_acq_withGradients(x)
+            #f_acqu = multioutput.gather_Y(tmp, self.nb_output, target_len = len(x))
+            f_acqu, df_acqu = np.average(tmp, 1)[:, np.newaxis], np.average(dtmp, 1)[:, np.newaxis]
+        else:
+            f_acqu, df_acqu = self._compute_acq_withGradients(x)
+
+
         cost_x, cost_grad_x = self.cost_withGradients(x)
         f_acq_cost = f_acqu/cost_x
         df_acq_cost = (df_acqu*cost_x - f_acqu*cost_grad_x)/(cost_x**2)

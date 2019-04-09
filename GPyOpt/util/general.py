@@ -2,7 +2,7 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import numpy as np
-from scipy.special import erfc
+from scipy.special import erfc, erf
 import scipy.stats as stats
 import scipy.special as special
 import time
@@ -274,6 +274,34 @@ def change_of_var_Phi(m, s):
     m_cdf = stats.norm.cdf(a)
     s_cdf = np.sqrt(m_cdf - np.square(m_cdf) - 2 * special.owens_t(a, h))
     return m_cdf, s_cdf
+
+def change_of_var_Phi_withGradients(m, s, dmdx, dsdx):
+    """ from arrays of mean and std of NORMAL variables X, produce the mean and std of
+    Phi(X) where Phi is the normal cumulative distribution
+    E[Phi(X)] = Phi(m/sqrt(1 + s^2))
+    Var[Phi(X)] = E - E^2 - T (m/sqrt(1 + s^2), m/sqrt(1 + 2*s^2))
+    RETURNS VARIANCE (and not STD)
+    """
+    assert np.ndim(dmdx) == np.ndim(m) + 1, 'dim of m: {}, dim of dm: {}'.formate(np.ndim(m), np.ndim(dmdx))
+    assert np.ndim(dsdx) == np.ndim(s) + 1, 'dim of s: {}, dim of ds: {}'.formate(np.ndim(s), np.ndim(dsdx))
+    v = np.square(s)
+    a = m / np.sqrt(1 + v)
+    h = 1 / np.sqrt(1 + 2 * v)
+    mcdf = stats.norm.cdf(a)
+    vcdf = mcdf - np.square(mcdf) - 2 * special.owens_t(a, h)
+    # Carefull 
+    dadx = dmdx / np.sqrt(1+v[:,:, None]) - a[:,:, None] * s[:,:, None] * dsdx / (1+v[:,:, None])
+    #dhdx = - 2 * s * dsdx * h / (1+2*v)
+    A = np.exp(-np.square(a[:,:, None])/2)
+    dmcdfdx = 1/np.sqrt(2*np.pi)* A * dadx
+    dTda = - A /(2*np.sqrt(2* np.pi)) * erf(a*h/np.sqrt(2))[:,:, None]
+    dTdh = -1/(2*np.pi *(1+v[:,:, None])) * np.exp(-np.square(m*h))[:,:, None] * h[:,:, None] * s[:,:, None] * dsdx
+    dTdx = dTda + dTdh
+
+    dvcdfdx = dmcdfdx - 2 * mcdf[:,:, None] * dmcdfdx - 2 * dTdx 
+
+    return mcdf, vcdf, dmcdfdx, dvcdfdx
+
 
 def product_indep(m_X, s_X, m_Y, s_Y):
     """ from arrays of mean and std of random variables X, produce the mean and std of
