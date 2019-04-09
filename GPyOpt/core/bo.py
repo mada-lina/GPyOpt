@@ -36,7 +36,7 @@ class BO(object):
     """
 
 
-    def __init__(self, model, space, objective, acquisition, evaluator, X_init, Y_init=None, cost = None, normalize_Y = True, model_update_interval = 1, de_duplication = False):
+    def __init__(self, model, space, objective, acquisition, evaluator, X_init, Y_init=None, cost = None, normalize_Y = True, model_update_interval = 1, de_duplication = False, hp_update_interval=1):
         self.model = model
         self.space = space
         self.objective = objective
@@ -44,6 +44,7 @@ class BO(object):
         self.evaluator = evaluator
         self.normalize_Y = normalize_Y
         self.model_update_interval = model_update_interval
+        self.hp_update_interval = hp_update_interval
         self.X = X_init
         self.Y = Y_init
         self.cost = CostModel(cost)
@@ -341,7 +342,8 @@ class BO(object):
 
             else:
                 Y_inmodel = self.Y
-            self.model.updateModel(X_inmodel, Y_inmodel, None, None)
+            update_hp = self.num_acquisitions % self.hp_update_interval == 0
+            self.model.updateModel(X_inmodel, Y_inmodel, None, None, update_hp=update_hp)
 
         # Save parameters of the model
         self._save_model_parameter_values()
