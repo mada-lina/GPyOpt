@@ -59,3 +59,14 @@ class AcquisitionLCB_target(AcquisitionBase):
         m, s = self.model.predict(x)
         m_folded, _ = folded_normal(m - np.repeat(np.atleast_1d(self.target)[np.newaxis, :], len(m), 0), s)
         return np.average(np.atleast_1d(m_folded), 1)[:, np.newaxis]
+    
+    def _compute_acq_splitted(self, x):
+        """
+        Computes the two parts (expected value, std) used in the acqu function 
+        """
+        m, s = self.model.predict(x)
+        m_folded, s_folded = folded_normal(m - np.repeat(np.atleast_1d(self.target)[np.newaxis, :], len(m), 0), s)
+        m_exp = np.average(np.atleast_1d(m_folded), 1)[:, np.newaxis]
+        n_var = np.shape(m_exp)[1] if np.ndim(m_exp)> 1 else 1
+        s_exp = np.sqrt(1/n_var * np.average(np.atleast_1d(np.square(s_folded)), 1))[:, np.newaxis]
+        return m_exp, s_exp 

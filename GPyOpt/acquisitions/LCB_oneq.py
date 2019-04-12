@@ -77,3 +77,17 @@ class AcquisitionLCB_oneq(AcquisitionBase):
         m_sigmas = 2 * m_p - 1
         m_acq = self.coeff_dim * (1 + np.sum(m_sigmas * self.tgt_sigmas, 1))
         return -m_acq[:, np.newaxis]
+
+    def _compute_acq_splitted(self, x):
+        """
+        Computes the two parts (expected value, std) used in the acqu function 
+        """
+        m, s = self.model.predict(x) #mean and std of the
+        if type(self.model) == gpmodel.GPModelCustomLik:
+            m_p, s_p = change_of_var_Phi(m, s)
+        else:
+            m_p, s_p = m, s
+        m_sigmas, s_sigmas = 2 * m_p - 1, 2 * s_p
+        m_acq = self.coeff_dim * (1 + np.sum(m_sigmas * self.tgt_sigmas, 1))
+        s_acq = self.coeff_dim * np.sqrt(np.sum(np.square(s_sigmas * self.tgt_sigmas), 1))
+        return m_acq[:,np.newaxis], s_acq[:,np.newaxis]

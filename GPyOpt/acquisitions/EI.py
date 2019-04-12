@@ -56,3 +56,10 @@ class AcquisitionEI(AcquisitionBase):
         """
         m, _ = self.model.predict(x)
         return m
+    
+    def _compute_acq_splitted(self, x):
+        """
+        Computes the two parts (expected value, std) used in the acqu function 
+        """
+        m, s = self.model.predict(x)
+        return m, s
