@@ -153,7 +153,7 @@ class BO(object):
         
 
         # --- Initialize time cost of the evaluations
-        while (self.max_time > self.cum_time):
+        while (self.max_time > (time.time() - self.time_zero)):
             # --- Update model
             try:
                 ttmp = time.time()
@@ -347,6 +347,30 @@ class BO(object):
 
         # Save parameters of the model
         self._save_model_parameter_values()
+
+    def _create_model(self, normalization_type='stats'):
+        """
+        Create the model (when more than one observation is available) and saves the parameters (if available)
+        Doesn't optimize the HyperParameters.
+        Do nothing if there is already a model
+        """
+        if self.model.model is None:
+            # input that goes into the model (is unziped in case there are categorical variables)
+            X_inmodel = self.space.unzip_inputs(self.X)
+
+            # Y_inmodel is the output that goes into the model
+            if self.normalize_Y:
+                if hasattr(self.acquisition, 'target'):
+                    Y_inmodel, target_inmodel = normalize(self.Y, normalization_type, target = self.acquisition_ftarget)
+                    self.acquisition.target = target_inmodel
+                else:
+                    Y_inmodel = normalize(self.Y, normalization_type)
+            else:
+                Y_inmodel = self.Y
+            self.model.updateModel(X_inmodel, Y_inmodel, None, None, update_hp=False)
+            # Save parameters of the model
+            self._save_model_parameter_values()
+
 
     def _save_model_parameter_values(self):
         if self.model_parameters_iterations is None:
