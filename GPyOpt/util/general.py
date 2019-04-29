@@ -290,14 +290,15 @@ def change_of_var_Phi_withGradients(m, s, dmdx, dsdx):
     mcdf = stats.norm.cdf(a)
     vcdf = mcdf - np.square(mcdf) - 2 * special.owens_t(a, h)
     # Carefull 
+    
     dadx = dmdx / np.sqrt(1+v[:,:, None]) - a[:,:, None] * s[:,:, None] * dsdx / (1+v[:,:, None])
     #dhdx = - 2 * s * dsdx * h / (1+2*v)
     A = np.exp(-np.square(a[:,:, None])/2)
     dmcdfdx = 1/np.sqrt(2*np.pi)* A * dadx
     dTda = - A /(2*np.sqrt(2* np.pi)) * erf(a*h/np.sqrt(2))[:,:, None]
-    dTdh = -1/(2*np.pi *(1+v[:,:, None])) * np.exp(-np.square(m*h))[:,:, None] * h[:,:, None] * s[:,:, None] * dsdx
-    dTdx = dTda + dTdh
-
+    dTdhdhdx = - (np.exp(-np.square(m*h))[:,:, None] * h[:,:, None] * s[:,:, None] * dsdx) /(2*np.pi *(1+v[:,:, None]))
+    
+    dTdx = dTda * dadx  + dTdhdhdx
     dvcdfdx = dmcdfdx - 2 * mcdf[:,:, None] * dmcdfdx - 2 * dTdx 
 
     return mcdf, vcdf, dmcdfdx, dvcdfdx

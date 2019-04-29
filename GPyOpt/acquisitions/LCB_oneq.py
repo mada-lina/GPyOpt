@@ -61,12 +61,36 @@ class AcquisitionLCB_oneq(AcquisitionBase):
         msigma, vsigma, dmsigmadx, dvsigmadx = (2*mp -1), 4*vp, 2*dmpdx, 4*dvpdx
         macq = self.coeff_dim * (1 + np.dot(msigma, self.tgt_sigmas))
         sacq = self.coeff_dim * np.sqrt(np.dot(vsigma, np.square(self.tgt_sigmas)))
+        
         dmacqdx = self.coeff_dim * np.einsum('j,ijk', self.tgt_sigmas, dmsigmadx)
-        dsacqdx = self.coeff_dim * np.einsum('j,ijk', np.square(self.tgt_sigmas), dvsigmadx)/(2*sacq)
+        dsacqdx = self.coeff_dim**2 * np.einsum('j,ijk', np.square(self.tgt_sigmas), dvsigmadx)/(2*sacq)
+        #dsacqdx =  np.einsum('j,ijk', np.square(self.coeff_dim * self.tgt_sigmas), dvsigmadx * vsigma[:,:, np.newaxis]) /sacq
+        f_acqu = macq + self.exploration_weight * sacq       
+        df_acqu = dmacqdx + self.exploration_weight * dsacqdx
+        return f_acqu[:, np.newaxis], df_acqu[:, np.newaxis]
+        
+#        eps = 1e-6
+#        x_eps = x + eps * np.ones(np.shape(x))
+#        m_eps, s_eps, dmdx_eps, dsdx_eps = self.model.predict_withGradients(x_eps)
+#        mp_eps, vp_eps, dmpdx_eps, dvpdx_eps = change_of_var_Phi_withGradients(m_eps, s_eps, dmdx_eps, dsdx_eps)
+#        (m_eps - m) /eps
+#        np.sum(dmdx, 1)
+#        (mp_eps - mp) /eps
+#        np.sum(dmpdx, 2)
+#        (vp_eps - vp) /eps
+#        np.sum(dvpdx, 2)
+#        msigma_eps, vsigma_eps, dmsigmadx_eps, dvsigmadx_eps = (2*mp_eps -1), 4*vp_eps, 2*dmpdx_eps, 4*dvpdx_eps
+#        (msigma_eps - msigma)/eps
+#        np.sum(dmsigmadx, 2)
+#        macq_eps = self.coeff_dim * (1 + np.dot(msigma_eps, self.tgt_sigmas))
+#        sacq_eps = self.coeff_dim * np.sqrt(np.dot(vsigma_eps, np.square(self.tgt_sigmas)))
+#        dmacqdx_eps = self.coeff_dim * np.einsum('j,ijk', self.tgt_sigmas, dmsigmadx_eps)
+#        dsacqdx_eps = self.coeff_dim * np.einsum('j,ijk', np.square(self.tgt_sigmas), dvsigmadx_eps)/(2*sacq_eps)
+#
 
-        f_acqu = -macq + self.exploration_weight * sacq       
-        df_acqu = -dmacqdx + self.exploration_weight * dsacqdx
-        return f_acqu[:, np.newaxis], df_acqu
+
+
+
 
     def _compute_acq_novar(self, x):
         """

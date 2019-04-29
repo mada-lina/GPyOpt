@@ -57,7 +57,7 @@ class AcquisitionBase(object):
             #X_ext = multioutput.extend_X(x) 
             tmp, dtmp = self._compute_acq_withGradients(x)
             #f_acqu = multioutput.gather_Y(tmp, self.nb_output, target_len = len(x))
-            f_acqu, df_acqu = np.average(tmp, 1)[:, np.newaxis], np.average(dtmp, 1)[:, np.newaxis]
+            f_acqu, df_acqu = np.average(tmp, 1)[:, np.newaxis], np.average(dtmp, 1)
         else:
             f_acqu, df_acqu = self._compute_acq_withGradients(x)
 
