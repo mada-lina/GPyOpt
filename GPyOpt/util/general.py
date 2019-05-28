@@ -202,7 +202,7 @@ def merge_values(values1,values2):
     return np.atleast_2d(merged_array)
 
 
-def normalize(Y, normalization_type='stats', target = None):
+def normalize(Y, normalization_type='stats', target = None, return_normargs=False):
     """Normalize the array Y using statistics or its range.
     In case Y is effectively a 2d-array normalize by column
 
@@ -230,6 +230,7 @@ def normalize(Y, normalization_type='stats', target = None):
         mean = np.repeat(mean[np.newaxis, :], len(Y),0)
         std = np.repeat(std[np.newaxis, :], len(Y),0)
         Y_norm = (Y - mean)/std
+        args = {'mean': mean, 'std':std}
 
     elif normalization_type == 'maxmin':
         Y_min = Y.min(0)
@@ -241,15 +242,52 @@ def normalize(Y, normalization_type='stats', target = None):
         Y_range= np.repeat(Y_range[np.newaxis, :], len(Y), 0)         
         Y_norm = Y - Y_min
         Y_norm[Y_range > 0] = 2 * (Y_norm[Y_range > 0] / Y_range[Y_range > 0] - 0.5)
+        args = {'min': Y_range[0], 'max': Y_range[1]}
+
+    else:
+        raise ValueError('Unknown normalization type: {}'.format(normalization_type))
+    if return_normargs:
+        if target is None:
+            return Y_norm, args
+        else:
+            assert len(target) == Y.shape[1], "target has shape {} while Y is {}".format(np.shape(target), np.shape(Y))
+            return Y_norm, target_norm, args
+    else:
+        if target is None:
+            return Y_norm
+        else:
+            assert len(target) == Y.shape[1], "target has shape {} while Y is {}".format(np.shape(target), np.shape(Y))
+            return Y_norm, target_norm
+
+def invert_normalize(Y, normalization_type='stats', norm_args={}, target = None):
+    """Normalize the array Y using statistics or its range.
+    In case Y is effectively a 2d-array normalize by column
+
+    :param Y: array that you want to normalize.
+    :param normalization_type: String specifying the kind of normalization
+    to use. Options are 'stats' to use mean and standard deviation,
+    or 'maxmin' to use the range of function values.
+    :param target
+    
+    :return Y_normalized: The normalized vector.
+    """
+    Y = np.asarray(Y, dtype=float)
+
+    #if np.max(Y.shape) != Y.size:
+    #    raise NotImplementedError('Only 1-dimensional arrays are supported.')
+
+    # Only normalize with non null sdev (divide by zero). For only one
+    # data point both std and ptp return 0.
+    if normalization_type == 'stats':
+        mean = norm_args['mean']
+        std = norm_args['std']
+        Y_invert = Y * std + mean
 
     else:
         raise ValueError('Unknown normalization type: {}'.format(normalization_type))
 
-    if target is None:
-        return Y_norm
-    else:
-        assert len(target) == Y.shape[1], "target has shape {} while Y is {}".format(np.shape(target), np.shape(Y))
-        return Y_norm, target_norm
+    return Y_invert
+    
 
 def folded_normal(m, s):
     """ From a given RV X ~ N(m, s^2) get the mean and standard deviation 

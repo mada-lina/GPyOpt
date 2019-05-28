@@ -7,7 +7,7 @@ import numpy as np
 import time
 import csv
 
-from ..util.general import best_value, normalize
+from ..util.general import best_value, normalize, invert_normalize
 from ..util.duplicate_manager import DuplicateManager
 from ..core.errors import InvalidConfigError
 from ..core.task.cost import CostModel
@@ -328,20 +328,7 @@ class BO(object):
         Updates the model (when more than one observation is available) and saves the parameters (if available).
         """
         if self.num_acquisitions % self.model_update_interval == 0:
-
-            # input that goes into the model (is unziped in case there are categorical variables)
-            X_inmodel = self.space.unzip_inputs(self.X)
-
-            # Y_inmodel is the output that goes into the model
-            if self.normalize_Y:
-                if hasattr(self.acquisition, 'target'):
-                    Y_inmodel, target_inmodel = normalize(self.Y, normalization_type, target = self.acquisition_ftarget)
-                    self.acquisition.target = target_inmodel
-                else:
-                    Y_inmodel = normalize(self.Y, normalization_type)
-
-            else:
-                Y_inmodel = self.Y
+            X_inmodel, Y_inmodel = self._gen_XY_inmodel(normalization_type)
             update_hp = self.num_acquisitions % self.hp_update_interval == 0
             self.model.updateModel(X_inmodel, Y_inmodel, None, None, update_hp=update_hp)
 
@@ -355,22 +342,35 @@ class BO(object):
         Do nothing if there is already a model
         """
         if self.model.model is None:
-            # input that goes into the model (is unziped in case there are categorical variables)
-            X_inmodel = self.space.unzip_inputs(self.X)
-
-            # Y_inmodel is the output that goes into the model
-            if self.normalize_Y:
-                if hasattr(self.acquisition, 'target'):
-                    Y_inmodel, target_inmodel = normalize(self.Y, normalization_type, target = self.acquisition_ftarget)
-                    self.acquisition.target = target_inmodel
-                else:
-                    Y_inmodel = normalize(self.Y, normalization_type)
-            else:
-                Y_inmodel = self.Y
+            X_inmodel, Y_inmodel = self._gen_XY_inmodel(normalization_type)
+            update_hp = self.num_acquisitions % self.hp_update_interval == 0
             self.model.updateModel(X_inmodel, Y_inmodel, None, None, update_hp=False)
             # Save parameters of the model
             self._save_model_parameter_values()
 
+    def _gen_XY_inmodel(self, normalization_type='stats'):
+        """ Manage normalization and keep track of the arguments used"""
+        # input that goes into the model (is unziped in case there are categorical variables)
+        X_inmodel = self.space.unzip_inputs(self.X)
+        if self.normalize_Y:
+            if hasattr(self.acquisition, 'target'):
+                Y_inmodel, target_inmodel, norm_args = normalize(self.Y, normalization_type, target = self.acquisition_ftarget, return_normargs = True)
+                self.acquisition.target = target_inmodel
+                self.norm_args = norm_args
+            else:
+                Y_inmodel, norm_args = normalize(self.Y, normalization_type, return_normargs = True)
+            self.norm_args = norm_args
+        else:
+            Y_inmodel = self.Y
+            self.norm_args = np.array([0, 1.])
+        return X_inmodel, Y_inmodel
+
+    def _invert_normalize_Y(self, Y, normalization_type='stats'):
+        if self.normalize_Y:
+            Y_invert = invert_normalize(Y, normalization_type=normalization_type,norm_args=self.norm_args)
+        else:
+            Y_invert = Y
+        return Y_invert
 
     def _save_model_parameter_values(self):
         if self.model_parameters_iterations is None:
