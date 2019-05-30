@@ -343,7 +343,6 @@ class BO(object):
         """
         if self.model.model is None:
             X_inmodel, Y_inmodel = self._gen_XY_inmodel(normalization_type)
-            update_hp = self.num_acquisitions % self.hp_update_interval == 0
             self.model.updateModel(X_inmodel, Y_inmodel, None, None, update_hp=False)
             # Save parameters of the model
             self._save_model_parameter_values()
