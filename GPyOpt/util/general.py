@@ -225,12 +225,13 @@ def normalize(Y, normalization_type='stats', target = None, return_normargs=Fals
         mean = Y.mean(0)
         std = Y.std(0)
         std[std<=0] = 1.
+        args = {'mean': mean, 'std':std}
         if target is not None:
             target_norm = (target - mean) / std        
         mean = np.repeat(mean[np.newaxis, :], len(Y),0)
         std = np.repeat(std[np.newaxis, :], len(Y),0)
         Y_norm = (Y - mean)/std
-        args = {'mean': mean, 'std':std}
+        
 
     elif normalization_type == 'maxmin':
         Y_min = Y.min(0)
