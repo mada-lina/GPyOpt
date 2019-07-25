@@ -281,9 +281,9 @@ class GPModelCustomLik(BOModel):
     analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
     _inf_method_map = {'EP':GPy.inference.latent_function_inference.expectation_propagation.EP, 
                         'Laplace':GPy.inference.latent_function_inference.Laplace}
-    _likelihood_map = {'Bernouilli':GPy.likelihoods.Bernoulli, 'Binomial':GPy.likelihoods.Binomial}
+    _likelihood_map = {'Bernoulli':GPy.likelihoods.Bernoulli, 'Binomial':GPy.likelihoods.Binomial}
 
-    def __init__(self, likelihood = 'Bernouilli',  inf_method = 'Laplace', gp_link=None, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', 
+    def __init__(self, likelihood = 'Bernoulli',  inf_method = 'Laplace', gp_link=None, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', 
                  max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  
                  verbose=True, ARD=False, mo=None):
         """
