@@ -80,7 +80,8 @@ class BayesianOptimization(BO):
     def __init__(self, f, domain = None, constraints = None, cost_withGradients = None, model_type = 'GP', X = None, Y = None,
     	initial_design_numdata = 5, initial_design_type='random', acquisition_type ='EI', normalize_Y = True,
         exact_feval = False, acquisition_optimizer_type = 'lbfgs', model_update_interval=1, evaluator_type = 'sequential',
-        batch_size = 1, num_cores = 1, verbosity=False, verbosity_model = False, maximize=False, de_duplication=False,hp_update_interval=1, **kwargs):
+        batch_size = 1, num_cores = 1, verbosity=False, verbosity_model = False, maximize=False, de_duplication=False,hp_update_interval=1,
+        hp_update_first=True, **kwargs):
 
         # if mo in kwargs:
         #     self.mo_flag = True
@@ -112,6 +113,7 @@ class BayesianOptimization(BO):
         self.verbosity_model = verbosity_model
         self.model_update_interval = model_update_interval
         self.hp_update_interval = hp_update_interval
+        self.hp_update_first = hp_update_first
         self.de_duplication = de_duplication
         self.kwargs = kwargs
 
@@ -210,7 +212,8 @@ class BayesianOptimization(BO):
                                                     normalize_Y            = self.normalize_Y,
                                                     model_update_interval  = self.model_update_interval,
                                                     de_duplication         = self.de_duplication,
-                                                    hp_update_interval     = self.hp_update_interval)
+                                                    hp_update_interval     = self.hp_update_interval,
+                                                    hp_update_first     = self.hp_update_first)
 
         #NEWFS
         if((self.kwargs.get('acquisition_weight_lindec',False)) and (self.acquisition_type[:3] == 'LCB')):

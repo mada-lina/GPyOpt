@@ -33,10 +33,13 @@ class BO(object):
     :param normalize_Y: whether to normalize the outputs before performing any optimization (default, True).
     :param model_update_interval: interval of collected observations after which the model is updated (default, 1).
     :param de_duplication: GPyOpt DuplicateManager class. Avoids re-evaluating the objective at previous, pending or infeasible locations (default, False).
+    :hp_update_interval: frequency of update of the hyperparameters
+    :hp_update_first: should the hyperparameters be updated when num acquisition == 0
     """
 
 
-    def __init__(self, model, space, objective, acquisition, evaluator, X_init, Y_init=None, cost = None, normalize_Y = True, model_update_interval = 1, de_duplication = False, hp_update_interval=1):
+    def __init__(self, model, space, objective, acquisition, evaluator, X_init, Y_init=None, cost = None, normalize_Y = True, 
+            model_update_interval = 1, de_duplication = False, hp_update_interval=1, hp_update_first=True):
         self.model = model
         self.space = space
         self.objective = objective
@@ -45,6 +48,7 @@ class BO(object):
         self.normalize_Y = normalize_Y
         self.model_update_interval = model_update_interval
         self.hp_update_interval = hp_update_interval
+        self.hp_update_first = hp_update_first
         self.X = X_init
         self.Y = Y_init
         self.cost = CostModel(cost)
@@ -326,10 +330,11 @@ class BO(object):
     def _update_model(self, normalization_type='stats'):
         """
         Updates the model (when more than one observation is available) and saves the parameters (if available).
+        if self.hp_update_first = False then hyperparameters are not updated when self.num_acquisition == 0
         """
         if self.num_acquisitions % self.model_update_interval == 0:
             X_inmodel, Y_inmodel = self._gen_XY_inmodel(normalization_type)
-            update_hp = self.num_acquisitions % self.hp_update_interval == 0
+            update_hp = (self.num_acquisitions % self.hp_update_interval == 0) and (self.hp_update_first or self.num_acquisitions !=0)
             self.model.updateModel(X_inmodel, Y_inmodel, None, None, update_hp=update_hp)
 
         # Save parameters of the model
