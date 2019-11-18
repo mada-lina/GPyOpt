@@ -12,6 +12,7 @@ from .LP import AcquisitionLP
 from .ES import AcquisitionEntropySearch
 from .EI_target import AcquisitionEI_target
 from .LCB_target import AcquisitionLCB_target
+from .LCB_pspace import AcquisitionLCB_pspace
 from .LCB_oneq import AcquisitionLCB_oneq
 
 
