@@ -113,6 +113,7 @@ class ArgumentsManager(object):
         num_inducing = self.kwargs.get('num_inducing',100)
         max_iters = self.kwargs.get('max_iters',1000)
         optimize_restarts= self.kwargs.get('optimize_restarts',5)
+        mean_function = self.kwargs.get('mean_function')
 
         # new args for multiple output a dictionary is expected with the fields
         # 'missing_data'
@@ -123,7 +124,8 @@ class ArgumentsManager(object):
         # --- Initialize GP model with MLE on the parameters
         # --------
         if model_type == 'GP' or model_type == 'sparseGP':
-            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD, mo = mo)
+            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, 
+                        num_inducing, verbosity_model, ARD, mo = mo, mean_function=mean_function)
 
         # --------
         # --- Initialize GP model with MCMC on the parameters
@@ -134,7 +136,8 @@ class ArgumentsManager(object):
             subsample_interval = self.kwargs.get('subsample_interval',10)
             step_size = self.kwargs.get('step_size',1e-1)
             leapfrog_steps = self.kwargs.get('leapfrog_steps',20)
-            return GPModel_MCMC(kernel, noise_var, exact_feval, n_samples, n_burnin, subsample_interval, step_size, leapfrog_steps, verbosity_model)
+            return GPModel_MCMC(kernel, noise_var, exact_feval, n_samples, n_burnin, subsample_interval, step_size, 
+                        leapfrog_steps, verbosity_model, mean_function=mean_function)
 
         # --------
         # --- Initialize RF: values taken from default in scikit-learn
@@ -165,11 +168,12 @@ class ArgumentsManager(object):
             prev = self.kwargs['prev'] # previous regressor should be a       
             assert ((prev is None) or issubclass(prev, BOModel)), "prev has not the desired type{}".format(type(prev))
             alpha = self.kwargs.get('alpha', 1)
-            return GPStacked(prev, alpha, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, False, 10, verbosity_model, ARD)
+            return GPStacked(prev, alpha, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, 
+                optimize_restarts, False, 10, verbosity_model, ARD, mean_function=mean_function)
             
         elif model_type == 'GP_CUSTOM_LIK':
             likelihood = self.kwargs.get('likelihood', 'Bernouilly_10') # previous regressor should be a       
             inf_method = self.kwargs.get('inf_method', 'EP')
             gp_link = self.kwargs.get('gp_link')
-            return GPModelCustomLik(likelihood, inf_method, gp_link, kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, False,
-                10, verbosity_model, ARD, mo = mo)
+            return GPModelCustomLik(likelihood, inf_method, gp_link, kernel, noise_var, exact_feval, model_optimizer_type, 
+                max_iters, optimize_restarts, False, 10, verbosity_model, ARD, mo = mo, mean_function=mean_function)

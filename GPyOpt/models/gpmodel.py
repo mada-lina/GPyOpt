@@ -33,7 +33,7 @@ class GPModel(BOModel):
     analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
 
     def __init__(self, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, 
-        optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False, mo=None):
+        optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False, mo=None, mean_function=None):
         self.kernel = kernel
         self.noise_var = noise_var
         self.exact_feval = exact_feval
@@ -45,6 +45,8 @@ class GPModel(BOModel):
         self.num_inducing = num_inducing
         self.model = None
         self.ARD = ARD
+        self.mean_function=mean_function
+        self._mf = None
         
         # workaround to deal with multiple output
         if mo is not None:
@@ -68,6 +70,11 @@ class GPModel(BOModel):
 
         # --- define kernel
         self.input_dim = X.shape[1]
+        if type(self.mean_function) == float:
+            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf.f = lambda x:self.mean_function
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
             kern = GPy.kern.Matern52(self.input_dim, variance=1., ARD=self.ARD) #+ GPy.kern.Bias(self.input_dim)
         else:
@@ -86,16 +93,17 @@ class GPModel(BOModel):
                 if self.mo_kappa_fix:
                     coreg.kappa.fix()
                 kern = kern ** coreg 
-                self.model = GPy.models.GPRegression(self.X_ext, self.Y_ext, kern, Y_metadata={'output_index':self.X_ext[:, -1][:,np.newaxis]})
+                self.model = GPy.models.GPRegression(self.X_ext, self.Y_ext, kern, Y_metadata={'output_index':self.X_ext[:, -1][:,np.newaxis]},
+                        mean_function=self._mf)
             else:
-                self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var)
+                self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var,mean_function=self._mf)
         
         else:
             if self.mo_flag:
                 raise NotImplementedError()
 
             else:
-                self.model = GPy.models.SparseGPRegression(X, Y, kernel=kern, num_inducing=self.num_inducing)
+                self.model = GPy.models.SparseGPRegression(X, Y, kernel=kern, num_inducing=self.num_inducing,mean_function=self._mf)
 
         # --- restrict variance if exact evaluations of the objective
         if self.exact_feval:
@@ -231,7 +239,8 @@ class GPModel(BOModel):
                             max_iters=self.max_iters,
                             optimize_restarts=self.optimize_restarts,
                             verbose=self.verbose,
-                            ARD=self.ARD)
+                            ARD=self.ARD,
+                            mean_function=self.mean_function)
 
         copied_model._create_model(self.model.X,self.model.Y)
         copied_model.updateModel(self.model.X,self.model.Y, None, None)
@@ -285,7 +294,7 @@ class GPModelCustomLik(BOModel):
 
     def __init__(self, likelihood = 'Bernoulli',  inf_method = 'Laplace', gp_link=None, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', 
                  max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  
-                 verbose=True, ARD=False, mo=None):
+                 verbose=True, ARD=False, mo=None,mean_function=None):
         """
         Two new parameters:
             - inf_method: Inference method used to deqal with the non default likelihood
@@ -307,8 +316,9 @@ class GPModelCustomLik(BOModel):
         self.num_inducing = num_inducing
         self.model = None
         self.ARD = ARD
-        
-    
+        self.mean_function = mean_function
+        self._mf = None
+
          # workaround to deal with multiple output
         if mo is not None:
             self.mo_flag = True
@@ -349,6 +359,11 @@ class GPModelCustomLik(BOModel):
 
         # --- define kernel
         self.input_dim = X.shape[1]
+        if type(self.mean_function) == float:
+            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf.f = lambda x:self.mean_function
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
             kern = GPy.kern.Matern52(self.input_dim, variance=1., ARD=self.ARD) #+ GPy.kern.Bias(self.input_dim)
         else:
@@ -376,12 +391,12 @@ class GPModelCustomLik(BOModel):
                 Y_metadata.update({'output_index':self.X_ext[:, -1][:,np.newaxis]})
                 self.model = GPy.core.GP(self.X_ext, self.Y_ext, kern , inference_method=self.inf_meth, 
                                          likelihood=self.likelihood, normalizer=False, 
-                                         name='CoregCustomLik', Y_metadata = Y_metadata)
+                                         name='CoregCustomLik', Y_metadata = Y_metadata, mean_function=self._mf)
 
             else:
                 Y_metadata= self._gen_YData(Y)
                 self.model = GPy.core.GP(X, Y, kernel=kern, inference_method=self.inf_meth, likelihood=self.likelihood, 
-                                                                                normalizer=False, Y_metadata = Y_metadata)
+                                                normalizer=False, Y_metadata = Y_metadata,mean_function=self._mf)
         else:
             raise NotImplementedError()
 
@@ -530,7 +545,8 @@ class GPModelCustomLik(BOModel):
                             max_iters=self.max_iters,
                             optimize_restarts=self.optimize_restarts,
                             verbose=self.verbose,
-                            ARD=self.ARD)
+                            ARD=self.ARD,
+                            mean_function=self.mean_function)
 
         copied_model._create_model(self.model.X,self.model.Y)
         copied_model.updateModel(self.model.X,self.model.Y, None, None)
@@ -567,13 +583,13 @@ class GPStacked(GPModel):
     """
     analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
 
-    def __init__(self, prev = None, alpha=1, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False):
+    def __init__(self, prev = None, alpha=1, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', 
+        max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False, mean_function=None):
         self.alpha = alpha
         self.prev = prev        
-        super(GPStacked,self).__init__(kernel=kernel, noise_var=noise_var, 
-             exact_feval=exact_feval, optimizer=optimizer, max_iters=max_iters, 
-             optimize_restarts=optimize_restarts, sparse=sparse, 
-             num_inducing=num_inducing, verbose=verbose, ARD=ARD)
+        super(GPStacked,self).__init__(kernel=kernel, noise_var=noise_var, exact_feval=exact_feval, optimizer=optimizer, 
+            max_iters=max_iters, optimize_restarts=optimize_restarts, sparse=sparse, num_inducing=num_inducing, 
+            verbose=verbose, ARD=ARD, mean_function=mean_function)
 
     def _get_residuals(self, X, Y):
         residu = Y - self.prev._predict(X)
@@ -587,6 +603,11 @@ class GPStacked(GPModel):
 
         # --- define kernel
         self.input_dim = X.shape[1]
+        if type(self.mean_function) == float:
+            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf.f = lambda x:self.mean_function
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
             kern = GPy.kern.Matern52(self.input_dim, variance=1., ARD=self.ARD) #+ GPy.kern.Bias(self.input_dim)
         else:
@@ -597,9 +618,9 @@ class GPStacked(GPModel):
         noise_var = Y_res.var()*0.01 if self.noise_var is None else self.noise_var
 
         if not self.sparse:
-            self.model = GPy.models.GPRegression(X, Y_res, kernel=kern, noise_var=noise_var)
+            self.model = GPy.models.GPRegression(X, Y_res, kernel=kern, noise_var=noise_var, mean_function=self._mf)
         else:
-            self.model = GPy.models.SparseGPRegression(X, Y_res, kernel=kern, num_inducing=self.num_inducing)
+            self.model = GPy.models.SparseGPRegression(X, Y_res, kernel=kern, num_inducing=self.num_inducing, mean_function=self._mf)
 
         # --- restrict variance if exact evaluations of the objective
         if self.exact_feval:
@@ -735,7 +756,8 @@ class GPStacked(GPModel):
                             max_iters=self.max_iters,
                             optimize_restarts=self.optimize_restarts,
                             verbose=self.verbose,
-                            ARD=self.ARD)
+                            ARD=self.ARD, 
+                            mean_function=self.mean_function)
 
         copied_model._create_model(self.model.X,self.model.Y)
         copied_model.updateModel(self.model.X,self.model.Y, None, None)
@@ -781,7 +803,8 @@ class GPModel_MCMC(BOModel):
     MCMC_sampler = True
     analytical_gradient_prediction = True # --- Needed in all models to check is the gradients of acquisitions are computable.
 
-    def __init__(self, kernel=None, noise_var=None, exact_feval=False, n_samples = 10, n_burnin = 100, subsample_interval = 10, step_size = 1e-1, leapfrog_steps=20, verbose=False):
+    def __init__(self, kernel=None, noise_var=None, exact_feval=False, n_samples = 10, n_burnin = 100, subsample_interval = 10, 
+                    step_size = 1e-1, leapfrog_steps=20, verbose=False, mean_function=None):
         self.kernel = kernel
         self.noise_var = noise_var
         self.exact_feval = exact_feval
@@ -792,7 +815,9 @@ class GPModel_MCMC(BOModel):
         self.step_size = step_size
         self.leapfrog_steps = leapfrog_steps
         self.model = None
-
+        self.mean_function = mean_function
+        self._mf = None
+        
     def _create_model(self, X, Y):
         """
         Creates the model given some input data X and Y.
@@ -800,6 +825,11 @@ class GPModel_MCMC(BOModel):
 
         # --- define kernel
         self.input_dim = X.shape[1]
+        if type(self.mean_function) == float:
+            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf.f = lambda x:self.mean_function
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
             kern = GPy.kern.RBF(self.input_dim, variance=1.)
         else:
@@ -808,7 +838,7 @@ class GPModel_MCMC(BOModel):
 
         # --- define model
         noise_var = Y.var()*0.01 if self.noise_var is None else self.noise_var
-        self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var)
+        self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var,mean_function=self._mf)
 
         # --- Define prior on the hyper-parameters for the kernel (for integrated acquisitions)
         self.model.kern.set_prior(GPy.priors.Gamma.from_EV(2.,4.))
@@ -937,7 +967,8 @@ class GPModel_MCMC(BOModel):
                                 subsample_interval = self.subsample_interval,
                                 step_size = self.step_size,
                                 leapfrog_steps= self.leapfrog_steps,
-                                verbose= self.verbose)
+                                verbose= self.verbose, 
+                                mean_function=self.mean_function)
 
         copied_model._create_model(self.model.X,self.model.Y)
         copied_model.updateModel(self.model.X,self.model.Y, None, None)
