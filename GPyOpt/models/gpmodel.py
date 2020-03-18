@@ -71,7 +71,7 @@ class GPModel(BOModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
-            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
             self._mf.f = lambda x:self.mean_function
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
@@ -360,7 +360,7 @@ class GPModelCustomLik(BOModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
-            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
             self._mf.f = lambda x:self.mean_function
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
@@ -604,7 +604,7 @@ class GPStacked(GPModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
-            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
             self._mf.f = lambda x:self.mean_function
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
@@ -826,7 +826,7 @@ class GPModel_MCMC(BOModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
-            self._mf = GPy.Mapping(input_dim=self.input_dim, output_dim=1)
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
             self._mf.f = lambda x:self.mean_function
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
