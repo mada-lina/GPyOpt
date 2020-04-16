@@ -71,8 +71,18 @@ class GPModel(BOModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
+            nb_output = self.mo_output_dim
             self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
-            self._mf.f = lambda x:self.mean_function
+            self._mf.f = lambda x: np.array([self.mean_function for xx in np.atleast_2d(x)])
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
+        elif type(self.mean_function) == list:
+            nb_output = self.mo_output_dim
+            assert len(self.mean_function) == nb_output, "len mean_function does not match nb_output"
+            def coreg_mf(x):
+                return np.array([np.atleast_1d(self.mean_function[int(xx[-1])]) for xx in np.atleast_2d(x)])
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim+1, output_dim=1)
+            self._mf.f =  coreg_mf
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
@@ -360,8 +370,18 @@ class GPModelCustomLik(BOModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
+            nb_output = self.mo_output_dim
             self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
-            self._mf.f = lambda x:self.mean_function
+            self._mf.f = lambda x: np.array([self.mean_function for xx in np.atleast_2d(x)])
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
+        elif type(self.mean_function) == list:
+            nb_output = self.mo_output_dim
+            assert len(self.mean_function) == nb_output, "len mean_function does not match nb_output"
+            def coreg_mf(x):
+                return np.array([np.atleast_1d(self.mean_function[int(xx[-1])]) for xx in np.atleast_2d(x)])
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim+1, output_dim=1)
+            self._mf.f =  coreg_mf
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
@@ -604,8 +624,18 @@ class GPStacked(GPModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
+            nb_output = self.mo_output_dim
             self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
-            self._mf.f = lambda x:self.mean_function
+            self._mf.f = lambda x: np.array([self.mean_function for xx in np.atleast_2d(x)])
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
+        elif type(self.mean_function) == list:
+            nb_output = self.mo_output_dim
+            assert len(self.mean_function) == nb_output, "len mean_function does not match nb_output"
+            def coreg_mf(x):
+                return np.array([np.atleast_1d(self.mean_function[int(xx[-1])]) for xx in np.atleast_2d(x)])
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim+1, output_dim=1)
+            self._mf.f =  coreg_mf
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
@@ -826,8 +856,18 @@ class GPModel_MCMC(BOModel):
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
+            nb_output = self.mo_output_dim
             self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
-            self._mf.f = lambda x:self.mean_function
+            self._mf.f = lambda x: np.array([self.mean_function for xx in np.atleast_2d(x)])
+            self._mf.update_gradients = lambda a,b: 0
+            self._mf.gradients_X = lambda a,b: 0
+        elif type(self.mean_function) == list:
+            nb_output = self.mo_output_dim
+            assert len(self.mean_function) == nb_output, "len mean_function does not match nb_output"
+            def coreg_mf(x):
+                return np.array([np.atleast_1d(self.mean_function[int(xx[-1])]) for xx in np.atleast_2d(x)])
+            self._mf = GPy.core.Mapping(input_dim=self.input_dim+1, output_dim=1)
+            self._mf.f =  coreg_mf
             self._mf.update_gradients = lambda a,b: 0
             self._mf.gradients_X = lambda a,b: 0
         if self.kernel is None:
