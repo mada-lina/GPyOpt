@@ -68,23 +68,22 @@ class GPModel(BOModel):
         Creates the model given some input data X and Y.
         """
 
+
+
         # --- define kernel
         self.input_dim = X.shape[1]
         if type(self.mean_function) == float:
-            nb_output = self.mo_output_dim
-            self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
-            self._mf.f = lambda x: np.array([self.mean_function for xx in np.atleast_2d(x)])
-            self._mf.update_gradients = lambda a,b: 0
-            self._mf.gradients_X = lambda a,b: 0
+            self._mf = gen_scalar_mf(self.mean_function, self.input_dim)
+            self._empirical_mf = False
+        elif self.mean_function == 'empirical':
+            self._empirical_mf = True
         elif type(self.mean_function) == list:
             nb_output = self.mo_output_dim
             assert len(self.mean_function) == nb_output, "len mean_function does not match nb_output"
             def coreg_mf(x):
                 return np.array([np.atleast_1d(self.mean_function[int(xx[-1])]) for xx in np.atleast_2d(x)])
-            self._mf = GPy.core.Mapping(input_dim=self.input_dim+1, output_dim=1)
-            self._mf.f =  coreg_mf
-            self._mf.update_gradients = lambda a,b: 0
-            self._mf.gradients_X = lambda a,b: 0
+            self._mf = gen_func_mf(coreg_mf, self.input_dim+1)
+            self._empirical_mf = False
         if self.kernel is None:
             kern = GPy.kern.Matern52(self.input_dim, variance=1., ARD=self.ARD) #+ GPy.kern.Bias(self.input_dim)
         else:
@@ -367,23 +366,30 @@ class GPModelCustomLik(BOModel):
         Creates the model given some input data X and Y.
         """
 
-        # --- define kernel
+        # --- dealing with mean functions (tricky)
         self.input_dim = X.shape[1]
+        self._empirical_mf = False
         if type(self.mean_function) == float:
-            nb_output = self.mo_output_dim
-            self._mf = GPy.core.Mapping(input_dim=self.input_dim, output_dim=1)
-            self._mf.f = lambda x: np.array([self.mean_function for xx in np.atleast_2d(x)])
-            self._mf.update_gradients = lambda a,b: 0
-            self._mf.gradients_X = lambda a,b: 0
+            self._mf = gen_scalar_mf(self.mean_function, self.input_dim)
+        elif self.mean_function == 'empirical':
+            self._empirical_mf = True
+            if self.mo_flag:
+                mean_emp = np.average(Y, 0) / self.nb_obs
+                def coreg_mf(x):
+                    return np.array([np.atleast_1d(mean_emp[int(xx[-1])]) for xx in np.atleast_2d(x)])
+                self._mf = gen_func_mf(coreg_mf, self.input_dim+1)          
+            else:
+                mean_emp = np.average(Y) / self.nb_obs
+                self._mf = gen_scalar_mf(mean_emp, self.input_dim)
         elif type(self.mean_function) == list:
             nb_output = self.mo_output_dim
             assert len(self.mean_function) == nb_output, "len mean_function does not match nb_output"
             def coreg_mf(x):
                 return np.array([np.atleast_1d(self.mean_function[int(xx[-1])]) for xx in np.atleast_2d(x)])
-            self._mf = GPy.core.Mapping(input_dim=self.input_dim+1, output_dim=1)
-            self._mf.f =  coreg_mf
-            self._mf.update_gradients = lambda a,b: 0
-            self._mf.gradients_X = lambda a,b: 0
+            self._mf = gen_func_mf(coreg_mf, self.input_dim+1)
+            
+
+        # --- define kernel
         if self.kernel is None:
             kern = GPy.kern.Matern52(self.input_dim, variance=1., ARD=self.ARD) #+ GPy.kern.Bias(self.input_dim)
         else:
@@ -447,6 +453,15 @@ class GPModelCustomLik(BOModel):
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
         if self.max_iters > 0 and update_hp:
             # --- update the model maximizing the marginal likelihood.
+            if self._empirical_mf:
+                if self.mo_flag:
+                    mean_emp = np.average(Y_all, 0) / self.nb_obs
+                    def coreg_mf(x):
+                        return np.array([np.atleast_1d(mean_emp[int(xx[-1])]) for xx in np.atleast_2d(x)])
+                    self.model.mean_function = gen_func_mf(coreg_mf, self.input_dim+1)          
+                else:
+                    mean_emp = np.average(Y_all) / self.nb_obs
+                    self.model.mean_function = gen_scalar_mf(mean_emp, self.input_dim)
             if self.optimize_restarts==1:
                 self.model.optimize(optimizer=self.optimizer, max_iters = self.max_iters, messages=False, ipython_notebook=False)
             else:
@@ -1026,3 +1041,18 @@ class GPModel_MCMC(BOModel):
         """
         return self.model.parameter_names()
 
+
+# gen mean functions
+def gen_scalar_mf(val, input_dim):
+    mf = GPy.core.Mapping(input_dim=input_dim, output_dim=1)
+    mf.f = lambda x: np.array([[val] for xx in np.atleast_2d(x)])
+    mf.update_gradients = lambda a,b: 0
+    mf.gradients_X = lambda a,b: 0
+    return mf
+
+def gen_func_mf(func, input_dim):
+    mf = GPy.core.Mapping(input_dim=input_dim, output_dim=1)
+    mf.f = func
+    mf.update_gradients = lambda a,b: 0
+    mf.gradients_X = lambda a,b: 0
+    return mf
