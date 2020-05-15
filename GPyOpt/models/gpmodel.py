@@ -371,16 +371,30 @@ class GPModelCustomLik(BOModel):
         self._empirical_mf = False
         if type(self.mean_function) == float:
             self._mf = gen_scalar_mf(self.mean_function, self.input_dim)
-        elif self.mean_function == 'empirical':
-            self._empirical_mf = True
-            if self.mo_flag:
-                mean_emp = np.average(Y, 0) / self.nb_obs
-                def coreg_mf(x):
-                    return np.array([np.atleast_1d(mean_emp[int(xx[-1])]) for xx in np.atleast_2d(x)])
-                self._mf = gen_func_mf(coreg_mf, self.input_dim+1)          
+        elif type(self.mean_function) is str:
+            split = self.mean_function.split('_')
+            if split[0] == 'empirical':
+                self._empirical_mf = True
+                if len(split) == 1:
+                    self._min_update_mf = 0
+                else:
+                    self._min_update_mf = int(split[1])
+                if self.mo_flag:
+                    if len(X) > self._min_update_mf:
+                        mean_emp = norm.ppf(np.average(Y, 0) / self.nb_obs)
+                    else:
+                        mean_emp = np.zeros(np.shape(Y)[1])
+                    def coreg_mf(x):
+                        return np.array([np.atleast_1d(mean_emp[int(xx[-1])]) for xx in np.atleast_2d(x)])
+                    self._mf = gen_func_mf(coreg_mf, self.input_dim+1)          
+                else:
+                    if len(X) > self._min_update_mf:
+                        mean_emp = norm.ppf(np.average(Y) / self.nb_obs)
+                    else:
+                        mean_emp = 0
+                    self._mf = gen_scalar_mf(mean_emp, self.input_dim)
             else:
-                mean_emp = np.average(Y) / self.nb_obs
-                self._mf = gen_scalar_mf(mean_emp, self.input_dim)
+                raise NotImplementedError()
         elif type(self.mean_function) == list:
             nb_output = self.mo_output_dim
             assert len(self.mean_function) == nb_output, "len mean_function does not match nb_output"
@@ -455,12 +469,18 @@ class GPModelCustomLik(BOModel):
             # --- update the model maximizing the marginal likelihood.
             if self._empirical_mf:
                 if self.mo_flag:
-                    mean_emp = np.average(Y_all, 0) / self.nb_obs
+                    if len(X_all) >  self._min_update_mf:
+                        mean_emp = norm.ppf(np.average(Y_all, 0) / self.nb_obs)
+                    else:
+                        mean_emp = np.zeros(np.shape(Y_all)[1])
                     def coreg_mf(x):
                         return np.array([np.atleast_1d(mean_emp[int(xx[-1])]) for xx in np.atleast_2d(x)])
-                    self.model.mean_function = gen_func_mf(coreg_mf, self.input_dim+1)          
+                    self.model.mean_function = gen_func_mf(coreg_mf, self.input_dim+1)     
                 else:
-                    mean_emp = np.average(Y_all) / self.nb_obs
+                    if len(X_all) >  self._min_update_mf:
+                        mean_emp = norm.ppf(np.average(Y_all) / self.nb_obs)
+                    else:
+                        mean_emp = 0
                     self.model.mean_function = gen_scalar_mf(mean_emp, self.input_dim)
             if self.optimize_restarts==1:
                 self.model.optimize(optimizer=self.optimizer, max_iters = self.max_iters, messages=False, ipython_notebook=False)
