@@ -109,10 +109,7 @@ class ArgumentsManager(object):
         max_iters = self.kwargs.get('max_iters',1000)
         optimize_restarts = self.kwargs.get('optimize_restarts',5)
         sparse = True if model_type == 'sparseGP' else False
-        optimize_restarts = self.kwargs.get('optimize_restarts',5)
         num_inducing = self.kwargs.get('num_inducing',100)
-        max_iters = self.kwargs.get('max_iters',1000)
-        optimize_restarts= self.kwargs.get('optimize_restarts',5)
         mean_function = self.kwargs.get('mean_function')
 
         # new args for multiple output a dictionary is expected with the fields
