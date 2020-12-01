@@ -94,14 +94,18 @@ class ArgumentsManager(object):
         # --------
         # --- Initialize GP model with MLE on the parameters
         # --------
-        if model_type == 'GP' or model_type == 'sparseGP':
-            if model_type == 'GP':
-                sparse = False
+        if model_type == 'GP' or model_type == 'sparseGP' or model_type == 'heteroscedasticGP':
             if model_type == 'sparseGP':
                 sparse = True
+            else:
+                sparse = False
+            if model_type == 'heteroscedasticGP':
+                heteroscedastic = True
+            else:
+                heteroscedastic = False
             optimize_restarts = self.kwargs.get('optimize_restarts',5)
             num_inducing = self.kwargs.get('num_inducing',10)
-            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD)
+            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD, heteroscedastic=heteroscedastic)
 
         # --------
         # --- Initialize GP model with MCMC on the parameters

@@ -67,12 +67,15 @@ class SingleObjective(Objective):
         evaluation is also provided.
         """
         cost_evals = []
-        f_evals     = np.empty(shape=[0, 1])
+        #f_evals     = np.empty(shape=[0, 1])
 
         for i in range(x.shape[0]):
             st_time    = time.time()
             rlt = self.func(np.atleast_2d(x[i]))
-            f_evals     = np.vstack([f_evals,rlt])
+            if i == 0:
+                f_evals = rlt
+            else:
+                f_evals     = np.vstack([f_evals,rlt])
             cost_evals += [time.time()-st_time]
         return f_evals, cost_evals
 

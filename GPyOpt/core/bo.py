@@ -40,7 +40,7 @@ class BO(object):
     """
 
 
-    def __init__(self, model, space, objective, acquisition, evaluator, X_init, Y_init=None, cost = None, normalize_Y = True, model_update_interval = 1, de_duplication = False):
+    def __init__(self, model, space, objective, acquisition, evaluator, X_init, Y_init=None, cost = None, normalize_Y = True, model_update_interval = 1, de_duplication = False, Y_var_init=None):
         self.model = model
         self.space = space
         self.objective = objective
@@ -50,6 +50,7 @@ class BO(object):
         self.model_update_interval = model_update_interval
         self.X = X_init
         self.Y = Y_init
+        self.Y_var = Y_var_init
         self.cost = CostModel(cost)
         self.normalization_type = 'stats' ## not added in the API
         self.de_duplication = de_duplication
@@ -125,6 +126,11 @@ class BO(object):
         # --- Initial function evaluation and model fitting
         if self.X is not None and self.Y is None:
             self.Y, cost_values = self.objective.evaluate(self.X)
+            if self.heteroscedastic:
+                self.Y = self.Y[:, 0][:, None]
+                self.Y_var = self.Y[:, 1][:, None]
+            else:
+                self.Y_var = None
             if self.cost.cost_type == 'evaluation_time':
                 self.cost.update_cost_model(self.X, cost_values)
 
@@ -201,7 +207,16 @@ class BO(object):
         """
         self.Y_new, cost_new = self.objective.evaluate(self.suggested_sample)
         self.cost.update_cost_model(self.suggested_sample, cost_new)
-        self.Y = np.vstack((self.Y,self.Y_new))
+        
+        if self.heteroscedastic:
+            assert (self.Y_new.shape[1]==2), 'In heteroscedastic mode, output of the fom should be (N, 2)'
+            self.Y_var_new = self.Y_new[:, 1][:, None]
+            self.Y_new = self.Y_new[:, 0][:, None]
+            self.Y = np.vstack((self.Y,self.Y_new))
+            self.Y_var = np.vstack((self.Y_var,self.Y_var_new))
+        else:
+            self.Y = np.vstack((self.Y,self.Y_new))
+            self.Y_var = None
 
     def _compute_results(self):
         """
@@ -251,14 +266,22 @@ class BO(object):
 
             # Y_inmodel is the output that goes into the model
             if self.normalize_Y:
+                self._Y_std = self.Y.std()
+                self._Y_mean = self.Y.mean()
                 Y_inmodel = normalize(self.Y, normalization_type)
             else:
+                self._Y_std = 1.
+                self._Y_mean = 0.
                 Y_inmodel = self.Y
-
-            self.model.updateModel(X_inmodel, Y_inmodel, None, None)
+            if self.heteroscedastic:
+                Y_var_inmodel = self.Y_var / np.square(self._Y_std)
+            else:
+                Y_var_inmodel = None
+            self.model.updateModel(X_inmodel, Y_inmodel, None, None, Y_var = Y_var_inmodel)
 
         # Save parameters of the model
-        self._save_model_parameter_values()
+        self.model_parameters_iterations = self.model.get_model_parameters()
+        #self._save_model_parameter_values()
 
     def _save_model_parameter_values(self):
         if self.model_parameters_iterations is None:

@@ -32,6 +32,7 @@ class BayesianOptimization(BO):
         - 'evaluation_time': a Gaussian process (mean) is used to handle the evaluation cost.
     :model_type: type of model to use as surrogate:
         - 'GP', standard Gaussian process.
+        - 'heteoscedasticGP' New GP with heteroscedastic noise
         - 'GP_MCMC', Gaussian process with prior in the hyper-parameters.
         - 'sparseGP', sparse Gaussian process.
         - 'warperdGP', warped Gaussian process.
@@ -132,7 +133,21 @@ class BayesianOptimization(BO):
                 self.model = self._model_chooser()
         else:
             self.model = self._model_chooser()
-
+        
+        # --- NEW Deal with heteroscedastic noise
+        if getattr(self.model,'heteroscedastic', False):
+            print('Heteroscedastic noise in use: ')
+            print('Initial Y (if not None) are expected to be of dim (N_points,2)')
+            print('Func to optimize should output arrays of dim (N_x,2)')
+            print('In both case the second column should be the variance of the values')
+            self.heteroscedastic = True
+            if self.Y is not None:
+                assert(self.Y.shape[1] == 2), 'Y should be of dim (N, 2) in the heteroscedastic case'
+            self.Y_var = self.Y[:, 1][:, None]
+            self.Y = self.Y[:, 0][:, None]
+        else:
+            self.heteroscedastic = False
+            self.Y_var = None
         # --- CHOOSE the acquisition optimizer_type
 
         # This states how the discrete variables are handled (exact search or rounding)
@@ -159,7 +174,8 @@ class BayesianOptimization(BO):
         self.evaluator = self._evaluator_chooser()
 
         # --- Create optimization space
-        super(BayesianOptimization,self).__init__(  model                  = self.model,
+        #BayesianOptimization,self
+        super().__init__(  model                  = self.model,
                                                     space                  = self.space,
                                                     objective              = self.objective,
                                                     acquisition            = self.acquisition,
@@ -169,7 +185,8 @@ class BayesianOptimization(BO):
                                                     cost                   = self.cost,
                                                     normalize_Y            = self.normalize_Y,
                                                     model_update_interval  = self.model_update_interval,
-                                                    de_duplication         = self.de_duplication)
+                                                    de_duplication         = self.de_duplication,
+                                                    Y_var_init             = self.Y_var)
 
     def _model_chooser(self):
         return self.problem_config.model_creator(self.model_type, self.exact_feval,self.space)

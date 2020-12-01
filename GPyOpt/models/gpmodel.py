@@ -29,7 +29,7 @@ class GPModel(BOModel):
 
     analytical_gradient_prediction = True  # --- Needed in all models to check is the gradients of acquisitions are computable.
 
-    def __init__(self, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False, mean_function=None):
+    def __init__(self, kernel=None, noise_var=None, exact_feval=False, optimizer='bfgs', max_iters=1000, optimize_restarts=5, sparse = False, num_inducing = 10,  verbose=True, ARD=False, mean_function=None, heteroscedastic=False):
         self.kernel = kernel
         self.noise_var = noise_var
         self.exact_feval = exact_feval
@@ -42,12 +42,16 @@ class GPModel(BOModel):
         self.model = None
         self.ARD = ARD
         self.mean_function = mean_function
-
+        self.heteroscedastic = heteroscedastic
+        if self.heteroscedastic:
+            self.def_include_likelihood = False
+        else:
+            self.def_include_likelihood = True
     @staticmethod
     def fromConfig(config):
         return GPModel(**config)
 
-    def _create_model(self, X, Y):
+    def _create_model(self, X, Y, **kwargs):
         """
         Creates the model given some input data X and Y.
         """
@@ -61,28 +65,48 @@ class GPModel(BOModel):
             self.kernel = None
 
         # --- define model
-        noise_var = Y.var()*0.01 if self.noise_var is None else self.noise_var
-
-        if not self.sparse:
-            self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var, mean_function=self.mean_function)
+        if self.heteroscedastic:
+            kern += GPy.kern.White(self.input_dim)
+            self.model = GPy.models.GPHeteroscedasticRegression(X, Y, kernel=kern)
+            Y_var = kwargs['Y_var']
+            self.model['.*het_Gauss.variance'] = np.abs(Y_var)
+            self.model.het_Gauss.variance.fix()
+            if self.exact_feval:
+                self.model.sum.white.variance.constrain_fixed(1e-6, warning=False)
+            else:
+                self.model.sum.white.variance.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
         else:
-            self.model = GPy.models.SparseGPRegression(X, Y, kernel=kern, num_inducing=self.num_inducing, mean_function=self.mean_function)
+            noise_var = Y.var()*0.01 if self.noise_var is None else self.noise_var
+            if not self.sparse:
+                self.model = GPy.models.GPRegression(X, Y, kernel=kern, noise_var=noise_var, mean_function=self.mean_function)
+            else:
+                self.model = GPy.models.SparseGPRegression(X, Y, kernel=kern, num_inducing=self.num_inducing, mean_function=self.mean_function)
 
-        # --- restrict variance if exact evaluations of the objective
-        if self.exact_feval:
-            self.model.Gaussian_noise.constrain_fixed(1e-6, warning=False)
-        else:
-            # --- We make sure we do not get ridiculously small residual noise variance
-            self.model.Gaussian_noise.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
+            # --- restrict variance if exact evaluations of the objective
+            if self.exact_feval:
+                self.model.Gaussian_noise.constrain_fixed(1e-6, warning=False)
+            else:
+                # --- We make sure we do not get ridiculously small residual noise variance
+                self.model.Gaussian_noise.constrain_bounded(1e-9, 1e6, warning=False) #constrain_positive(warning=False)
 
-    def updateModel(self, X_all, Y_all, X_new, Y_new):
+    def updateModel(self, X_all, Y_all, X_new, Y_new, **kwargs):
         """
         Updates the model with new observations.
         """
         if self.model is None:
-            self._create_model(X_all, Y_all)
+            self._create_model(X_all, Y_all, **kwargs)
         else:
+            print(X_all.shape, Y_all.shape)
+            if self.heteroscedastic:
+                self._create_model(X_all, Y_all, **kwargs)
+                #self.model.update_model(False)
+                #Y_var = kwargs['Y_var']
+                #self.model['.*het_Gauss.variance'] = np.abs(Y_var)
+                #Y_var = kwargs['Y_var']
+                #self.model['.*het_Gauss.variance'] = np.abs(Y_var)
+                #self.model.het_Gauss.variance.fix()
             self.model.set_XY(X_all, Y_all)
+
 
         # WARNING: Even if self.max_iters=0, the hyperparameters are bit modified...
         if self.max_iters > 0:
@@ -95,7 +119,11 @@ class GPModel(BOModel):
     def _predict(self, X, full_cov, include_likelihood):
         if X.ndim == 1:
             X = X[None,:]
-        m, v = self.model.predict(X, full_cov=full_cov, include_likelihood=include_likelihood)
+        if self.heteroscedastic:
+            # Likelihood not taken into account
+            m, v = self.model.predict(X, full_cov=full_cov, include_likelihood=self.def_include_likelihood)
+        else:
+            m, v = self.model.predict(X, full_cov=full_cov, include_likelihood=include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
         return m, v
 
@@ -126,14 +154,14 @@ class GPModel(BOModel):
         """
         Returns the location where the posterior mean is takes its minimal value.
         """
-        return self.model.predict(self.model.X)[0].min()
+        return self.model.predict(self.model.X, include_likelihood=self.def_include_likelihood)[0].min()
 
     def predict_withGradients(self, X):
         """
         Returns the mean, standard deviation, mean gradient and standard deviation gradient at X.
         """
         if X.ndim==1: X = X[None,:]
-        m, v = self.model.predict(X)
+        m, v = self.model.predict(X, include_likelihood=self.def_include_likelihood)
         v = np.clip(v, 1e-10, np.inf)
         dmdx, dvdx = self.model.predictive_gradients(X)
         dmdx = dmdx[:,:,0]
