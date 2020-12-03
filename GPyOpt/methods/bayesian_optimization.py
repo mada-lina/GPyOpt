@@ -187,6 +187,9 @@ class BayesianOptimization(BO):
                                                     model_update_interval  = self.model_update_interval,
                                                     de_duplication         = self.de_duplication,
                                                     Y_var_init             = self.Y_var)
+        
+        if((self.kwargs.get('acquisition_weight_lindec',False)) and (self.acquisition_type[:3] == 'LCB')):
+            self._dynamic_weights = 'linear'
 
     def _model_chooser(self):
         return self.problem_config.model_creator(self.model_type, self.exact_feval,self.space)

@@ -141,6 +141,17 @@ class BO(object):
         self.suggested_sample = self.X
         self.Y_new = self.Y
 
+        #NEWFS
+        if(getattr(self, '_dynamic_weights', None) == 'linear'):
+            maxit = self.max_iter
+            weight_init = self.acquisition.exploration_weight
+            update_weights = True
+            def dynamics_weight(n_iter):
+                return max(0.000001, weight_init * (1 - n_iter / (maxit-1)))
+        else:
+            update_weights = False
+
+
         # --- Initialize time cost of the evaluations
         while (self.max_time > self.cum_time):
             # --- Update model
@@ -150,8 +161,13 @@ class BO(object):
                 break
 
             if (self.num_acquisitions >= self.max_iter
-                    or (len(self.X) > 1 and self._distance_last_evaluations() <= self.eps)):
+                    or (len(self.X) > 1 and self._distance_last_evaluations() < self.eps)):
                 break
+
+            
+            if(update_weights):
+                self.acquisition.exploration_weight = dynamics_weight(self.num_acquisitions)
+
 
             self.suggested_sample = self._compute_next_evaluations()
 
