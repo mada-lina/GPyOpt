@@ -10,6 +10,7 @@ from .LCB import AcquisitionLCB
 from .LCB_mcmc import AcquisitionLCB_MCMC
 from .LP import AcquisitionLP
 from .ES import AcquisitionEntropySearch
+from .LCB_pspace import AcquisitionLCB_PSPACE
 
 def select_acquisition(name):
     '''
@@ -21,6 +22,8 @@ def select_acquisition(name):
         return AcquisitionEI_MCMC
     elif name == 'LCB':
         return AcquisitionLCB
+    elif name == 'LCB_PSPACE':
+        return AcquisitionLCB_PSPACE
     elif name == 'LCB_MCMC':
         return AcquisitionLCB_MCMC
     elif name == 'MPI':

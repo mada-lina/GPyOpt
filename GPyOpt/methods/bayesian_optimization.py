@@ -74,10 +74,13 @@ class BayesianOptimization(BO):
                 model_optimize_restarts, sparseGP, num_inducing and normalize can still be used but will be deprecated in the next version.
     """
 
-    def __init__(self, f, domain = None, constraints = None, cost_withGradients = None, model_type = 'GP', X = None, Y = None,
-    	initial_design_numdata = 5, initial_design_type='random', acquisition_type ='EI', normalize_Y = True,
-        exact_feval = False, acquisition_optimizer_type = 'lbfgs', model_update_interval=1, evaluator_type = 'sequential',
-        batch_size = 1, num_cores = 1, verbosity=False, verbosity_model = False, maximize=False, de_duplication=False, **kwargs):
+    def __init__(self, f, domain = None, constraints = None, cost_withGradients = None, 
+                 model_type = 'GP', X = None, Y = None,initial_design_numdata = 5, 
+                 initial_design_type='random', acquisition_type ='EI', normalize_Y = True,
+                 exact_feval = False, acquisition_optimizer_type = 'lbfgs', 
+                 model_update_interval=1, evaluator_type = 'sequential',
+                 batch_size = 1, num_cores = 1, verbosity=False, verbosity_model = False, 
+                 maximize=False, de_duplication=False, hp_update_interval = 1, **kwargs):
         self.modular_optimization = False
         self.initial_iter = True
         self.verbosity = verbosity
@@ -134,7 +137,7 @@ class BayesianOptimization(BO):
         else:
             self.model = self._model_chooser()
         
-        # --- NEW Deal with heteroscedastic noise
+        # --- NEW with heteroscedastic or binomial noise
         if getattr(self.model,'heteroscedastic', False):
             print('Heteroscedastic noise in use: ')
             print('Initial Y (if not None) are expected to be of dim (N_points,2)')
@@ -145,9 +148,33 @@ class BayesianOptimization(BO):
                 assert(self.Y.shape[1] == 2), 'Y should be of dim (N, 2) in the heteroscedastic case'
             self.Y_var = self.Y[:, 1][:, None]
             self.Y = self.Y[:, 0][:, None]
+
         else:
             self.heteroscedastic = False
             self.Y_var = None
+            
+        if getattr(self.model,'binomial', False):
+            print('binomial noise in use: ')
+            print('Initial Y (if not None) are expected to be of dim (N_points,2)')
+            print('Func to optimize should output arrays of dim (N_x,2)')
+            print('In both case the first column should be the number of success and second column should be the number of corresponding repetitions')
+            self.binomial = True
+            if self.Y is not None:
+                assert(self.Y.shape[1] == 2), 'Y should be of dim (N, 2) in the binomial case'
+            self.Y_Nrep = self.Y[:, 1][:, None]
+            self.Y = self.Y[:, 0][:, None]
+            if self.normalize_Y:
+                print('Normalization of the data is not possible with binomial noise')
+                print('Rather a bias term has been added and is treated as an hyperparameter')
+                # TODO: initial bias with empirical value
+                self.model._add_bias = True
+                self.normalize_Y = False
+            else:
+                self.model._add_bias = False 
+
+        else:
+            self.binomial = False
+            self.Y_Nrep = None
         # --- CHOOSE the acquisition optimizer_type
 
         # This states how the discrete variables are handled (exact search or rounding)
@@ -186,10 +213,15 @@ class BayesianOptimization(BO):
                                                     normalize_Y            = self.normalize_Y,
                                                     model_update_interval  = self.model_update_interval,
                                                     de_duplication         = self.de_duplication,
-                                                    Y_var_init             = self.Y_var)
+                                                    Y_var_init             = self.Y_var,
+                                                    Y_Nrep_init             = self.Y_Nrep,
+                                                    hp_update_interval = hp_update_interval,
+                                                    )
         
         if((self.kwargs.get('acquisition_weight_lindec',False)) and (self.acquisition_type[:3] == 'LCB')):
             self._dynamic_weights = 'linear'
+
+
 
     def _model_chooser(self):
         return self.problem_config.model_creator(self.model_type, self.exact_feval,self.space)

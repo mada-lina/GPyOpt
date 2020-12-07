@@ -3,7 +3,7 @@ from ..models.rfmodel import RFModel
 from ..models.warpedgpmodel import WarpedGPModel
 from ..models.input_warped_gpmodel import InputWarpedGPModel
 from ..core.evaluators import Sequential, RandomBatch, LocalPenalization, ThompsonBatch
-from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP
+from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionLCB_PSPACE
 from ..core.errors import InvalidConfigError
 
 class ArgumentsManager(object):
@@ -71,6 +71,10 @@ class ArgumentsManager(object):
         elif acquisition_type =='LCB_MCMC':
             return AcquisitionLCB_MCMC(model, space, acquisition_optimizer, None, acquisition_weight)
 
+        elif acquisition_type =='LCB_PSPACE':
+            return AcquisitionLCB_PSPACE(model, space, acquisition_optimizer, None, acquisition_weight) 
+
+
         else:
             raise Exception('Invalid acquisition selected.')
 
@@ -90,11 +94,12 @@ class ArgumentsManager(object):
         model_optimizer_type = self.kwargs.get('model_optimizer_type','lbfgs')
         max_iters = self.kwargs.get('max_iters',1000)
         optimize_restarts = self.kwargs.get('optimize_restarts',5)
+        mean_function = self.kwargs.get('mean_function')
 
         # --------
         # --- Initialize GP model with MLE on the parameters
         # --------
-        if model_type == 'GP' or model_type == 'sparseGP' or model_type == 'heteroscedasticGP':
+        if model_type == 'GP' or model_type == 'sparseGP' or model_type == 'heteroscedasticGP' or model_type == 'binomialGP':
             if model_type == 'sparseGP':
                 sparse = True
             else:
@@ -103,9 +108,24 @@ class ArgumentsManager(object):
                 heteroscedastic = True
             else:
                 heteroscedastic = False
+            if model_type == 'binomialGP':
+                binomial = True
+            else:
+                binomial = False
             optimize_restarts = self.kwargs.get('optimize_restarts',5)
             num_inducing = self.kwargs.get('num_inducing',10)
-            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, max_iters, optimize_restarts, sparse, num_inducing, verbosity_model, ARD, heteroscedastic=heteroscedastic)
+            return GPModel(kernel, noise_var, exact_feval, model_optimizer_type, 
+                           max_iters, optimize_restarts, sparse, num_inducing, 
+                           verbosity_model, ARD, heteroscedastic=heteroscedastic,
+                           binomial=binomial)
+
+        elif model_type == 'binomialGP':
+            likelihood = 'Binomial'
+            inf_method = 'Laplace'
+            gp_link = self.kwargs.get('gp_link')
+            return GPModel(likelihood, inf_method, gp_link, kernel, noise_var, exact_feval, model_optimizer_type, 
+                max_iters, optimize_restarts, False, 10, verbosity_model, ARD, mean_function=mean_function)
+
 
         # --------
         # --- Initialize GP model with MCMC on the parameters

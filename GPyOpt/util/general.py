@@ -1,10 +1,11 @@
 # Copyright (c) 2016, the GPyOpt Authors
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
-
 import numpy as np
-from scipy.special import erfc
+from scipy.special import erfc, erf, owens_t
+import scipy.stats as stats
 import time
 from ..core.errors import InvalidConfigError
+
 
 def compute_integrated_acquisition(acquisition,x):
     '''
@@ -232,3 +233,79 @@ def normalize(Y, normalization_type='stats'):
         raise ValueError('Unknown normalization type: {}'.format(normalization_type))
 
     return Y_norm
+
+
+
+def folded_normal(m, s):
+    """ From a given RV X ~ N(m, s^2) get the mean and standard deviation 
+    of the distribution of |X|
+    
+    """
+    mbys = m/s
+    dev = 0.5 * mbys * mbys 
+    m_folded = s * np.sqrt(2 / np.pi) * np.exp(- dev) + m * (1 - 2 * stats.norm.cdf(-mbys))
+    v_folded = m * m + s * s - m_folded * m_folded    
+    return m_folded, np.sqrt(v_folded)
+    
+
+def change_of_var_Phi(m, s):
+    """ from arrays of mean and std of NORMAL variables X, produce the mean and std of
+    Phi(X) where Phi is the normal cumulative distribution
+    E[Phi(X)] = Phi(m/sqrt(1 + s^2))
+    Var[Phi(X)] = E - E^2 - T (m/sqrt(1 + s^2), m/sqrt(1 + 2*s^2))
+    """
+    a = m / np.sqrt(1 + np.square(s))
+    h = 1 / np.sqrt(1 + 2 * np.square(s))
+    m_cdf = stats.norm.cdf(a)
+    s_cdf = np.sqrt(m_cdf - np.square(m_cdf) - 2 * owens_t(a, h))
+    return m_cdf, s_cdf
+
+def change_of_var_Phi_withGradients(m, s, dmdx, dsdx):
+    """ from arrays of mean and std of NORMAL variables X, produce the mean and std of
+    Phi(X) where Phi is the normal cumulative distribution
+    E[Phi(X)] = Phi(m/sqrt(1 + s^2))
+    Var[Phi(X)] = E - E^2 - T (m/sqrt(1 + s^2), m/sqrt(1 + 2*s^2))
+    RETURNS VARIANCE (and not STD)
+    """
+    #assert np.ndim(dmdx) == np.ndim(m) + 1, 'dim of m: {}, dim of dm: {}'.format(np.ndim(m), np.ndim(dmdx))
+    #assert np.ndim(dsdx) == np.ndim(s) + 1, 'dim of s: {}, dim of ds: {}'.format(np.ndim(s), np.ndim(dsdx))
+    v = np.square(s)
+    a = m / np.sqrt(1 + v)
+    h = 1 / np.sqrt(1 + 2 * v)
+    mcdf = stats.norm.cdf(a)
+    vcdf = mcdf - np.square(mcdf) - 2 * owens_t(a, h)
+    # Carefull 
+    
+    dadx = dmdx / np.sqrt(1+v) - a * s * dsdx / (1+v)
+    #dhdx = - 2 * s * dsdx * h / (1+2*v)
+    A = np.exp(-np.square(a)/2)
+    dmcdfdx = 1/np.sqrt(2*np.pi)* A * dadx
+    dTda = - A /(2*np.sqrt(2* np.pi)) * erf(a*h/np.sqrt(2))
+    dTdhdhdx = - (np.exp(-np.square(m*h)) * h * s * dsdx) /(2*np.pi *(1+v))
+    
+    dTdx = dTda * dadx  + dTdhdhdx
+    dvcdfdx = dmcdfdx - 2 * mcdf * dmcdfdx - 2 * dTdx 
+
+    return mcdf, vcdf, dmcdfdx, dvcdfdx
+
+
+def product_indep(m_X, s_X, m_Y, s_Y):
+    """ from arrays of mean and std of random variables X, produce the mean and std of
+    XY
+    E[XY] = E[X] * E[Y]
+    Var[XY] = Var[X]Var[Y] + Var[Y] E[X]^2 + Var[X] * E[Y]^2
+    """
+    v_X, v_Y = np.square(s_X), np.square(s_Y)
+    m_prod = m_X * m_Y
+    s_prod = np.sqrt(v_X * v_Y + v_X * np.square(m_Y) + v_Y * np.square(m_X)) 
+    return m_prod, s_prod
+
+def sum_indep(m_X, s_X, m_Y, s_Y):
+    """ from arrays of mean and std of random variables X, produce the mean and std of
+    XY
+    E[XY] = E[X] * E[Y]
+    Var[XY] = 
+    """
+    m_sum = m_X + m_Y
+    s_sum = np.sqrt(np.square(s_X) + np.square(s_Y))
+    return m_sum, s_sum

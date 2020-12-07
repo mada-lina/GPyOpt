@@ -40,7 +40,9 @@ class BO(object):
     """
 
 
-    def __init__(self, model, space, objective, acquisition, evaluator, X_init, Y_init=None, cost = None, normalize_Y = True, model_update_interval = 1, de_duplication = False, Y_var_init=None):
+    def __init__(self, model, space, objective, acquisition, evaluator, X_init, 
+            Y_init=None, cost = None, normalize_Y = True, model_update_interval = 1, 
+            de_duplication = False, Y_var_init=None, Y_Nrep_init = None, hp_update_interval = 1):
         self.model = model
         self.space = space
         self.objective = objective
@@ -51,12 +53,16 @@ class BO(object):
         self.X = X_init
         self.Y = Y_init
         self.Y_var = Y_var_init
+        self.Y_Nrep_init = Y_Nrep_init
         self.cost = CostModel(cost)
         self.normalization_type = 'stats' ## not added in the API
         self.de_duplication = de_duplication
         self.model_parameters_iterations = None
         self.context = None
         self.num_acquisitions = 0
+        self.hp_update_interval = hp_update_interval
+        if self.hp_update_interval != 1:
+            print('hyperparameters are updated only each {} iterations'.format(self.hp_update_interval))
 
     def suggest_next_locations(self, context = None, pending_X = None, ignored_X = None):
         """
@@ -129,8 +135,14 @@ class BO(object):
             if self.heteroscedastic:
                 self.Y = self.Y[:, 0][:, None]
                 self.Y_var = self.Y[:, 1][:, None]
+                self.Y_Nrep = None
+            elif self.binomial:
+                self.Y = self.Y[:, 0][:, None]
+                self.Y_var = None
+                self.Y_Nrep = self.Y[:, 1][:, None]                
             else:
                 self.Y_var = None
+                self.Y_Nrep = None
             if self.cost.cost_type == 'evaluation_time':
                 self.cost.update_cost_model(self.X, cost_values)
 
@@ -230,9 +242,35 @@ class BO(object):
             self.Y_new = self.Y_new[:, 0][:, None]
             self.Y = np.vstack((self.Y,self.Y_new))
             self.Y_var = np.vstack((self.Y_var,self.Y_var_new))
+        elif self.binomial:
+            assert (self.Y_new.shape[1]==2), 'In binomial mode, output of the fom should be (N, 2)'
+            self.Y_Nrep_new = self.Y_new[:, 1][:, None]
+            self.Y_new = self.Y_new[:, 0][:, None]
+            self.Y = np.vstack((self.Y,self.Y_new))
+            self.Y_Nrep = np.vstack((self.Y_Nrep,self.Y_Nrep_new))
         else:
             self.Y = np.vstack((self.Y,self.Y_new))
-            self.Y_var = None
+
+    def get_best(self, update=False):
+        """ return location of the best point both x, y seen and expected (i.e. based on  the 
+        expected values at locations already seen)"""
+        if update:   
+            self._update_model()
+        
+        x, y = self.X, self.Y        
+        y_exp = self.model.predict_with_link(x)[0]
+        y_exp = self._Y_std * y_exp + self._Y_mean
+        sign = -1 if self.maximize else 1
+        best_exp = np.argmin(y_exp*sign)
+        x_exp = x[best_exp]
+        y_exp = y_exp[best_exp]        
+        
+
+        best_seen =  np.argmin(y*sign)
+        x_seen = x[best_seen]
+        y_seen = y[best_seen]
+        
+        return (x_seen, y_seen), (x_exp, y_exp)
 
     def _compute_results(self):
         """
@@ -276,7 +314,7 @@ class BO(object):
         Updates the model (when more than one observation is available) and saves the parameters (if available).
         """
         if self.num_acquisitions % self.model_update_interval == 0:
-
+            update_hp = (self.num_acquisitions % self.hp_update_interval == 0)
             # input that goes into the model (is unziped in case there are categorical variables)
             X_inmodel = self.space.unzip_inputs(self.X)
 
@@ -293,11 +331,8 @@ class BO(object):
                 Y_var_inmodel = self.Y_var / np.square(self._Y_std)
             else:
                 Y_var_inmodel = None
-            self.model.updateModel(X_inmodel, Y_inmodel, None, None, Y_var = Y_var_inmodel)
+            self.model.updateModel(X_inmodel, Y_inmodel, None, None, Y_var = Y_var_inmodel, Y_Nrep = self.Y_Nrep, update_hp=update_hp)
 
-        # Save parameters of the model
-        self.model_parameters_iterations = self.model.get_model_parameters()
-        #self._save_model_parameter_values()
 
     def _save_model_parameter_values(self):
         if self.model_parameters_iterations is None:
