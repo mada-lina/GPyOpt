@@ -39,7 +39,7 @@ class AcquisitionLCB_PSPACE(AcquisitionBase):
             #pdb.set_trace()
             m, s = change_of_var_Phi(m, s)
     
-        f_acqu = -m + self.exploration_weight * s
+        f_acqu = m + self.exploration_weight * s
         return f_acqu
 
 
@@ -55,8 +55,8 @@ class AcquisitionLCB_PSPACE(AcquisitionBase):
             s = np.sqrt(v)
             dsdx = dvdx /(2 * s)
 
-        f_acqu = -m + self.exploration_weight * s       
-        df_acqu = -dmdx + self.exploration_weight * dsdx
+        f_acqu = m + self.exploration_weight * s       
+        df_acqu = dmdx + self.exploration_weight * dsdx
         return f_acqu, df_acqu
     
      
@@ -69,7 +69,7 @@ class AcquisitionLCB_PSPACE(AcquisitionBase):
         if type(self.model) == gpmodel.GPModelCustomLik:
             m, _ = change_of_var_Phi(m, s)
     
-        return m
+        return -m
 
     def _compute_acq_splitted(self, x):
         """
@@ -78,4 +78,4 @@ class AcquisitionLCB_PSPACE(AcquisitionBase):
         m, s = self.model.predict(x)
         if type(self.model) == gpmodel.GPModelCustomLik:
             m, s = change_of_var_Phi(m, s)
-        return m, s
+        return -m, s
