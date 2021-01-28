@@ -182,6 +182,8 @@ class GPModel(BOModel):
         if type(self.model.likelihood.gp_link) != Identity:
             #pdb.set_trace()
             m, s = change_of_var_Phi(m, np.sqrt(v))
+        else: 
+            s = np.sqrt(v)
         # We can take the square root because v is just a diagonal matrix of variances
         return m, s
 

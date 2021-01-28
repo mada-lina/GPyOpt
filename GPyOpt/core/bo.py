@@ -260,11 +260,10 @@ class BO(object):
         x, y = self.X, self.Y        
         y_exp = self.model.predict_with_link(x)[0]
         y_exp = self._Y_std * y_exp + self._Y_mean
-        if self.binomial:
-            sign = 1 if self.maximize else -1
-        else:
-            sign = -1 if self.maximize else 1
-        best_exp = np.argmin(y_exp*sign)
+        sign = 1 if self.maximize else -1
+        y_exp = y_exp * sign
+
+        best_exp = np.argmin(y_exp)
         x_exp = x[best_exp]
         y_exp = y_exp[best_exp]        
         
