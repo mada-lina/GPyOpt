@@ -82,7 +82,7 @@ class BayesianOptimization(BO):
         exact_feval = False, acquisition_optimizer_type = 'lbfgs', model_update_interval=1, evaluator_type = 'sequential',
         batch_size = 1, num_cores = 1, verbosity=False, verbosity_model = False, maximize=False, de_duplication=False,hp_update_interval=1,
         hp_update_first=True, **kwargs):
-
+		
         # if mo in kwargs:
         #     self.mo_flag = True
         #     self.mo = kwargs['mo']
@@ -94,6 +94,9 @@ class BayesianOptimization(BO):
         #     self.mo_output_card = 1
 
         # workaround to deal with multiple output
+
+	  #test madalina 
+	  print('test madalina')
         mo = kwargs.get('mo')
         if mo is not None:
             self.mo_flag = True
