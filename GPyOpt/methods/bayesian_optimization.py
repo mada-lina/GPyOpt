@@ -95,8 +95,6 @@ class BayesianOptimization(BO):
 
         # workaround to deal with multiple output
 
-	  #test madalina 
-	  print('test madalina')
         mo = kwargs.get('mo')
         if mo is not None:
             self.mo_flag = True
